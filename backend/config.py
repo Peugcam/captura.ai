@@ -1,10 +1,63 @@
 """
-Configuração do backend Python
+Configuração do backend Python com validações de segurança
 """
 import os
+import logging
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+def validate_api_key(key: str) -> bool:
+    """
+    Valida formato básico de API keys
+
+    Args:
+        key: API key para validar
+
+    Returns:
+        True se o formato é válido
+    """
+    key = key.strip()
+
+    # Verificar tamanho mínimo
+    if len(key) < 20:
+        return False
+
+    # Verificar se não é placeholder
+    placeholders = ['your_api_key_here', 'your_openai_key', 'your_openrouter_key',
+                   'sk-...', 'sk-xxx', 'example', 'placeholder', 'test']
+    if any(placeholder in key.lower() for placeholder in placeholders):
+        return False
+
+    # Verificar formato conhecido
+    valid_prefixes = ['sk-or-', 'sk-proj-', 'sk-']
+    if not any(key.startswith(prefix) for prefix in valid_prefixes):
+        logger.warning(f"API key with unknown format detected: {key[:10]}...")
+        return True  # Aceita, mas avisa
+
+    return True
+
+def sanitize_config_value(value: str, is_sensitive: bool = False) -> str:
+    """
+    Sanitiza valores de configuração para logging seguro
+
+    Args:
+        value: Valor a sanitizar
+        is_sensitive: Se é dado sensível (API key, senha, etc)
+
+    Returns:
+        Valor sanitizado
+    """
+    if is_sensitive and value:
+        # Mostra apenas primeiros e últimos 4 caracteres
+        if len(value) > 12:
+            return f"{value[:4]}...{value[-4:]}"
+        return "***"
+    return value
 
 # Gateway Go
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8000")
@@ -37,14 +90,28 @@ OCR_KEYWORDS = [
     "BURNED", "FRIED"
 ]
 
-# Vision AI - Multiple API Keys Support
+# Vision AI - Multiple API Keys Support with validation
 # Parse comma-separated API keys from environment
 API_KEYS_STR = os.getenv("API_KEYS", os.getenv("OPENROUTER_API_KEY", ""))
-API_KEYS = [key.strip() for key in API_KEYS_STR.split(",") if key.strip()]
+API_KEYS_RAW = [key.strip() for key in API_KEYS_STR.split(",") if key.strip()]
 
-# Legacy support
+# Validate API keys
+API_KEYS = []
+for key in API_KEYS_RAW:
+    if validate_api_key(key):
+        API_KEYS.append(key)
+        logger.info(f"✅ Valid API key loaded: {sanitize_config_value(key, is_sensitive=True)}")
+    else:
+        logger.error(f"❌ Invalid API key format detected and skipped: {key[:10]}...")
+
+# Ensure at least one valid key
 if not API_KEYS:
-    raise ValueError("No API keys configured! Set API_KEYS in .env")
+    raise ValueError(
+        "No valid API keys configured!\n"
+        "Please set API_KEYS in .env file.\n"
+        "Example: API_KEYS=sk-proj-xxxxx,sk-or-v1-xxxxx\n"
+        "See .env.example for details."
+    )
 
 VISION_MODEL = os.getenv("VISION_MODEL", "openai/gpt-4o")
 BATCH_SIZE_QUICK = int(os.getenv("BATCH_SIZE_QUICK", "10"))  # Processar 10 frames por vez

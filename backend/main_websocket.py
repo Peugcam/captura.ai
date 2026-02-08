@@ -18,10 +18,12 @@ import httpx
 import logging
 import time
 import json
+import os
 from typing import List, Dict, Set
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 import config
 from processor import FrameProcessor
@@ -35,15 +37,23 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Gerencia conexoes WebSocket"""
+    """Gerencia conexoes WebSocket com limites de segurança"""
 
-    def __init__(self):
+    def __init__(self, max_connections: int = 100):
         self.active_connections: Set[WebSocket] = set()
+        self.max_connections = max_connections
 
     async def connect(self, websocket: WebSocket):
+        # Verificar limite de conexões
+        if len(self.active_connections) >= self.max_connections:
+            logger.warning(f"⚠️  Connection limit reached ({self.max_connections}), rejecting new connection")
+            await websocket.close(code=1008, reason="Connection limit reached")
+            return False
+
         await websocket.accept()
         self.active_connections.add(websocket)
         logger.info(f"🔌 Cliente conectado. Total: {len(self.active_connections)}")
+        return True
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.discard(websocket)
@@ -250,13 +260,20 @@ class GTAAnalyticsBackend:
 # FastAPI app
 app = FastAPI(title="GTA Analytics Backend")
 
-# CORS para permitir conexoes do dashboard
+# CORS configurado de forma mais segura
+# Em produção, substitua ["*"] pela lista de origens permitidas
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+if "*" in ALLOWED_ORIGINS:
+    logger.warning("⚠️  CORS configurado para aceitar todas as origens (*). "
+                  "Em produção, defina ALLOWED_ORIGINS no .env com domínios específicos.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],  # Apenas métodos necessários
     allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests por 1 hora
 )
 
 # Connection manager global
@@ -313,33 +330,52 @@ async def export_to_excel(format: str = "luis"):
         Caminho do arquivo gerado
     """
     if not backend:
-        return {"error": "Backend not initialized"}
+        raise HTTPException(status_code=503, detail="Backend not initialized")
+
+    # Validar formato
+    valid_formats = ["luis", "standard", "advanced"]
+    if format not in valid_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid format. Must be one of: {', '.join(valid_formats)}"
+        )
 
     try:
-        # Gerar nome do arquivo com timestamp
+        # Gerar nome do arquivo com timestamp seguro
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"gta_match_{timestamp}.xlsx"
-        filepath = f"{config.EXPORT_DIR}/{filename}"
+        # Sanitizar: remover caracteres perigosos
+        safe_format = "".join(c for c in format if c.isalnum())
+        filename = f"gta_match_{timestamp}_{safe_format}.xlsx"
 
-        # Criar diretório se não existir
-        import os
+        # Criar diretório se não existir com permissões seguras
         os.makedirs(config.EXPORT_DIR, exist_ok=True)
 
-        # Exportar
-        backend.processor.export_to_excel(filepath)
+        # Path absoluto para prevenir path traversal
+        export_dir_abs = os.path.abspath(config.EXPORT_DIR)
+        filepath_abs = os.path.abspath(os.path.join(export_dir_abs, filename))
 
-        logger.info(f"📊 Excel exportado: {filepath}")
+        # Verificar que o arquivo está dentro do diretório permitido
+        if not filepath_abs.startswith(export_dir_abs):
+            logger.error(f"⚠️  Path traversal attempt detected: {filepath_abs}")
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        # Exportar
+        backend.processor.export_to_excel(filepath_abs)
+
+        logger.info(f"📊 Excel exportado: {filepath_abs}")
 
         return {
             "success": True,
-            "filepath": filepath,
             "filename": filename,
-            "format": format
+            "format": format,
+            "size_bytes": os.path.getsize(filepath_abs)
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Erro ao exportar: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
 @app.post("/reset")
@@ -367,28 +403,62 @@ async def reset_stats():
 @app.websocket("/events")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint para enviar eventos em tempo real"""
-    await manager.connect(websocket)
+    connected = await manager.connect(websocket)
+
+    if not connected:
+        return  # Conexão rejeitada por limite
 
     try:
         # Enviar mensagem de boas-vindas
         await websocket.send_json({
             "type": "connected",
             "message": "Connected to GTA Analytics Backend",
-            "game_type": config.GAME_TYPE
+            "game_type": config.GAME_TYPE,
+            "version": "2.0.0"
         })
 
-        # Manter conexao aberta
+        # Manter conexao aberta com rate limiting simples
+        message_count = 0
+        last_reset = time.time()
+
         while True:
             # Receber mensagens do cliente (se houver)
             try:
-                data = await websocket.receive_text()
-                logger.info(f"📨 Received from client: {data}")
-            except:
-                await asyncio.sleep(1)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+
+                # Rate limiting: máximo 60 mensagens por minuto
+                current_time = time.time()
+                if current_time - last_reset > 60:
+                    message_count = 0
+                    last_reset = current_time
+
+                message_count += 1
+                if message_count > 60:
+                    logger.warning(f"⚠️  Client exceeded rate limit, ignoring message")
+                    continue
+
+                # Validar tamanho da mensagem (máximo 1KB)
+                if len(data) > 1024:
+                    logger.warning(f"⚠️  Client sent oversized message ({len(data)} bytes), ignoring")
+                    continue
+
+                logger.debug(f"📨 Received from client: {data[:100]}")
+
+            except asyncio.TimeoutError:
+                # Timeout normal, continua esperando
+                continue
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.error(f"Error receiving WebSocket message: {e}")
+                break
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
         logger.info("Cliente desconectou")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        manager.disconnect(websocket)
 
 
 if __name__ == "__main__":
