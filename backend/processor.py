@@ -20,11 +20,19 @@ import cv2
 import numpy as np
 from PIL import Image
 import pytesseract
+import os
+
+# Configure Tesseract path for Windows
+if os.name == 'nt':  # Windows
+    tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    if os.path.exists(tesseract_path):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        os.environ['TESSDATA_PREFIX'] = r'C:\Program Files\Tesseract-OCR\tessdata'
 
 # Import local modules
 from src.brazilian_kill_parser import BrazilianKillParser
 from src.team_tracker import TeamTracker
-from src.simple_openrouter import SimpleOpenRouter
+from src.multi_api_client import MultiAPIClient
 import config
 
 logger = logging.getLogger(__name__)
@@ -36,6 +44,37 @@ class OCRPreFilter:
     def __init__(self, keywords: List[str]):
         self.keywords = keywords
         self.executor = ThreadPoolExecutor(max_workers=config.OCR_WORKERS)
+
+    def extract_roi(self, frame, game_type: str):
+        """
+        Extrai região de interesse (ROI) baseada no tipo de jogo
+
+        Args:
+            frame: Frame OpenCV (numpy array)
+            game_type: Tipo do jogo ('gta' ou 'naruto')
+
+        Returns:
+            ROI extraído ou frame inteiro se USE_ROI=false
+        """
+        if not config.USE_ROI:
+            return frame
+
+        height, width = frame.shape[:2]
+
+        if game_type == "gta":
+            # Kill feed GTA: canto superior direito
+            # Aproximadamente 30% da largura x 35% da altura
+            x1 = int(width * 0.70)   # 70% da largura (início)
+            y1 = int(height * 0.05)  # 5% do topo
+            x2 = width               # Até o final
+            y2 = int(height * 0.35)  # 35% do topo
+
+        else:  # naruto ou outros
+            # Para Naruto Online: tela inteira (combate acontece em toda tela)
+            x1, y1 = 0, 0
+            x2, y2 = width, height
+
+        return frame[y1:y2, x1:x2]
 
     def has_kill_keywords(self, image_base64: str) -> bool:
         """
@@ -55,30 +94,33 @@ class OCRPreFilter:
             # Convert para OpenCV
             frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-            # Crop kill feed area (top-right 40%)
-            height, width = frame.shape[:2]
-            x1 = int(width * 0.6)
-            y1 = 0
-            x2 = width
-            y2 = int(height * 0.4)
+            # Extrair ROI baseado no tipo de jogo
+            roi = self.extract_roi(frame, config.GAME_TYPE)
 
-            kill_feed_roi = frame[y1:y2, x1:x2]
-
-            # OCR
+            # OCR na ROI (mais rápido e preciso que tela inteira)
             text = pytesseract.image_to_string(
-                kill_feed_roi,
-                lang='por',
+                roi,
+                lang='eng',
                 config='--psm 6'
             )
 
-            # Check keywords
+            # Check keywords E números
             text_upper = text.upper()
             has_keyword = any(kw in text_upper for kw in self.keywords)
 
-            if has_keyword:
-                logger.info(f"🔍 OCR detected kill keyword in frame")
+            # Detectar números (dano de combate)
+            import re
+            has_numbers = bool(re.search(r'\d{2,}', text))  # Pelo menos 2 dígitos seguidos
 
-            return has_keyword
+            has_combat = has_keyword or has_numbers
+
+            if has_combat:
+                if has_keyword:
+                    logger.info(f"🔍 OCR detected combat keyword in frame")
+                if has_numbers:
+                    logger.info(f"🔢 OCR detected numbers in frame (possible damage)")
+
+            return has_combat  # Aceita se tem keyword OU números
 
         except Exception as e:
             logger.error(f"OCR error: {e}")
@@ -92,10 +134,287 @@ class OCRPreFilter:
 class VisionProcessor:
     """Processa frames com GPT-4o Vision"""
 
-    def __init__(self, api_key: str, model: str):
-        self.client = SimpleOpenRouter(api_key)
+    def __init__(self, api_keys: list, model: str):
+        self.client = MultiAPIClient(api_keys)
         self.model = model
         self.parser = BrazilianKillParser()
+
+    def get_prompt_for_game(self, game_type: str) -> str:
+        """
+        Retorna prompt otimizado baseado no tipo de jogo
+
+        Args:
+            game_type: Tipo do jogo ('gta' ou 'naruto')
+
+        Returns:
+            Prompt otimizado
+        """
+        if game_type == "gta":
+            return """Analyze these GTA V gameplay screenshots for KILL NOTIFICATIONS.
+
+🎯 PRIMARY FOCUS: KILL FEED in TOP-RIGHT CORNER
+
+WHAT TO LOOK FOR:
+1. **SKULL ICON 💀** - The most important indicator of a kill!
+2. **WEAPON ICONS** - Gun/knife/explosion icons between names
+3. **KILL TEXT** - Common verbs: "killed", "shot", "sniped", "plugged", "destroyed", "obliterated", "riddled", "blasted", "burned", "erased"
+4. **PLAYER NAMES** - Text on both sides of the icon/text
+
+KILL FEED FORMAT:
+[Killer Name] 💀 [Victim Name]
+or
+[Killer Name] [weapon icon] [Victim Name]
+or
+[Killer Name] shot [Victim Name]
+or
+[Killer Name] sniped [Victim Name]
+or
+[Killer Name] obliterated [Victim Name]
+
+WEAPON-SPECIFIC VERBS (GTA V):
+- Pistols: plugged, shot, popped, blasted
+- SMGs: riddled, drilled, ruined
+- Rifles: rifled, floored, ended, shot down
+- Shotguns: devastated, pulverized, shotgunned
+- Snipers: sniped, picked off, scoped
+- Explosives: erased, destroyed, obliterated, vaporized
+- Fire: burned, fried
+
+RETURN JSON FORMAT:
+{
+  "description": "what you see in the kill feed",
+  "has_combat": true/false,
+  "kills": [
+    {
+      "killer": "exact killer name",
+      "killer_team": "Unknown",
+      "victim": "exact victim name",
+      "victim_team": "Unknown",
+      "distance": "weapon/method (e.g., 'AK-47', 'headshot', 'explosion')"
+    }
+  ]
+}
+
+CRITICAL RULES:
+✅ Look for SKULL ICON (💀) or WEAPON ICONS in top-right
+✅ Extract names on BOTH SIDES of the icon
+✅ Include clan tags like [CLAN], colors, special characters
+❌ Do NOT hallucinate - only report visible kills
+❌ If no kill feed visible → {"has_combat": false, "kills": []}
+
+EXAMPLES:
+
+Example 1 (Kill with skull icon):
+{
+  "description": "Kill feed shows: xXProXx 💀 Noob123",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "xXProXx",
+      "killer_team": "Unknown",
+      "victim": "Noob123",
+      "victim_team": "Unknown",
+      "distance": "killed"
+    }
+  ]
+}
+
+Example 2 (Kill with weapon):
+{
+  "description": "Kill feed shows: Sniper99 [AK icon] Target42",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "Sniper99",
+      "killer_team": "Unknown",
+      "victim": "Target42",
+      "victim_team": "Unknown",
+      "distance": "AK-47"
+    }
+  ]
+}
+
+Example 3 (Multiple kills):
+{
+  "description": "Kill feed shows 2 kills: Player1 💀 Player2 and Player3 💀 Player4",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "Player1",
+      "killer_team": "Unknown",
+      "victim": "Player2",
+      "victim_team": "Unknown",
+      "distance": "killed"
+    },
+    {
+      "killer": "Player3",
+      "killer_team": "Unknown",
+      "victim": "Player4",
+      "victim_team": "Unknown",
+      "distance": "killed"
+    }
+  ]
+}
+
+REMEMBER: The SKULL ICON 💀 is your best friend! Always look for it in the top-right corner!"""
+
+        else:  # naruto
+            return """Analyze these Naruto Online game screenshots for COMBO COUNTERS and COMBAT.
+
+🎯 PRIMARY FOCUS: Look for COMBO TEXT on screen!
+
+COMBO COUNTER FORMAT IN NARUTO ONLINE:
+- "2 COMBO" or "2 combo" or "2COMBO"
+- "3 COMBO" or "3 combo" or "3COMBO"
+- "4 COMBO", "5 COMBO", "10 COMBO", etc.
+- May appear as "X HIT" or "X HITS" instead
+- Usually appears in CENTER or near attacking character
+
+YOUR JOB:
+1. **FIRST** - Look for text showing combo count ("2 COMBO", "3 COMBO", etc.)
+2. **SECOND** - Look for damage numbers (any size, any color)
+3. **THIRD** - Look for visual combat effects
+
+RETURN JSON FORMAT:
+{
+  "description": "describe what you see - MENTION COMBO TEXT if visible",
+  "has_combat": true/false,
+  "kills": [
+    {
+      "killer": "player",
+      "killer_team": "unknown",
+      "victim": "enemy",
+      "victim_team": "unknown",
+      "distance": "COMBO: X hits - damage: [numbers] - effects: [description]"
+    }
+  ]
+}
+
+EXAMPLES:
+
+Example 1 (Combo counter visible):
+{
+  "description": "Battle scene with '5 COMBO' text visible on screen, damage numbers 1234, 5678",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "player",
+      "killer_team": "unknown",
+      "victim": "enemy",
+      "victim_team": "unknown",
+      "distance": "COMBO: 5 hits - damage: 1234, 5678 - effects: energy blast"
+    }
+  ]
+}
+
+Example 2 (Small combo):
+{
+  "description": "I can see '2 COMBO' text appearing, single damage number 3421",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "player",
+      "killer_team": "unknown",
+      "victim": "enemy",
+      "victim_team": "unknown",
+      "distance": "COMBO: 2 hits - damage: 3421"
+    }
+  ]
+}
+
+Example 3 (No combo text but damage):
+{
+  "description": "Characters fighting, damage numbers 15234 visible but no combo counter",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "player",
+      "killer_team": "unknown",
+      "victim": "enemy",
+      "victim_team": "unknown",
+      "distance": "COMBO: 1 hit - damage: 15234"
+    }
+  ]
+}
+
+Example 4 (Large combo):
+{
+  "description": "Big combo! Text shows '12 COMBO', multiple damage numbers cascading",
+  "has_combat": true,
+  "kills": [
+    {
+      "killer": "player",
+      "killer_team": "unknown",
+      "victim": "enemy",
+      "victim_team": "unknown",
+      "distance": "COMBO: 12 hits - damage: multiple numbers - effects: massive combo chain"
+    }
+  ]
+}
+
+CRITICAL: Pay CLOSE attention to any text that looks like "X COMBO" or "X HIT" - this is the most important info!"""
+
+    def extract_roi_coords(self, width: int, height: int, game_type: str):
+        """
+        Calcula coordenadas do ROI baseado no tipo de jogo
+
+        Args:
+            width: Largura da imagem
+            height: Altura da imagem
+            game_type: Tipo do jogo
+
+        Returns:
+            Tuple (x1, y1, x2, y2)
+        """
+        if game_type == "gta":
+            # Kill feed GTA: canto superior direito
+            x1 = int(width * 0.70)   # 70% da largura (início)
+            y1 = int(height * 0.05)  # 5% do topo
+            x2 = width               # Até o final
+            y2 = int(height * 0.35)  # 35% do topo
+        else:  # naruto ou outros
+            x1, y1 = 0, 0
+            x2, y2 = width, height
+
+        return (x1, y1, x2, y2)
+
+    def apply_roi_to_base64(self, image_base64: str) -> str:
+        """
+        Aplica ROI em imagem base64 e retorna nova imagem base64
+
+        Args:
+            image_base64: Imagem em base64
+
+        Returns:
+            Imagem com ROI aplicado em base64
+        """
+        if not config.USE_ROI:
+            return image_base64
+
+        try:
+            # Decode base64
+            image_data = base64.b64decode(image_base64)
+            image = Image.open(io.BytesIO(image_data))
+
+            # Extrair coordenadas ROI
+            width, height = image.size
+            x1, y1, x2, y2 = self.extract_roi_coords(width, height, config.GAME_TYPE)
+
+            # Cortar imagem
+            roi_image = image.crop((x1, y1, x2, y2))
+
+            # Encode de volta pra base64
+            buffer = io.BytesIO()
+            roi_image.save(buffer, format='JPEG', quality=85)
+            roi_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+            logger.debug(f"ROI applied: {width}x{height} -> {x2-x1}x{y2-y1} ({((x2-x1)*(y2-y1)/(width*height))*100:.1f}% of original)")
+
+            return roi_base64
+
+        except Exception as e:
+            logger.error(f"Error applying ROI: {e}")
+            return image_base64  # Retorna original em caso de erro
 
     def process_batch(self, frames_base64: List[str]) -> List[Dict]:
         """
@@ -110,26 +429,13 @@ class VisionProcessor:
         if not frames_base64:
             return []
 
-        prompt = """Analise estas imagens do jogo GTA V Battle Royale.
+        # Aplicar ROI se habilitado
+        if config.USE_ROI:
+            logger.info(f"✂️ Applying ROI to {len(frames_base64)} frames")
+            frames_base64 = [self.apply_roi_to_base64(frame) for frame in frames_base64]
 
-Identifique TODAS as kills que aparecem no kill feed (canto superior direito).
-
-Formato brasileiro: [TEAM] [KILLER] MATOU [TEAM] [VICTIM] [DISTANCE]
-
-Retorne JSON:
-{
-  "kills": [
-    {
-      "killer": "nome_jogador",
-      "killer_team": "SIGLA",
-      "victim": "nome_vitima",
-      "victim_team": "SIGLA",
-      "distance": "120m"
-    }
-  ]
-}
-
-Se não houver kills, retorne: {"kills": []}"""
+        # Obter prompt otimizado baseado no tipo de jogo
+        prompt = self.get_prompt_for_game(config.GAME_TYPE)
 
         try:
             logger.info(f"🤖 Sending {len(frames_base64)} frames to GPT-4o")
@@ -138,7 +444,7 @@ Se não houver kills, retorne: {"kills": []}"""
                 model=self.model,
                 prompt=prompt,
                 images_base64=frames_base64,
-                temperature=0.1,
+                temperature=0,  # Zero para máxima determinismo e consistência
                 max_tokens=2000
             )
 
@@ -150,6 +456,9 @@ Se não houver kills, retorne: {"kills": []}"""
             import json
             content = response['content']
 
+            # LOG COMPLETO PARA DEBUG
+            logger.info(f"📝 GPT-4o Response: {content[:500]}")
+
             # Extract JSON from response
             start = content.find('{')
             end = content.rfind('}') + 1
@@ -157,6 +466,12 @@ Se não houver kills, retorne: {"kills": []}"""
             if start != -1 and end > start:
                 json_str = content[start:end]
                 data = json.loads(json_str)
+
+                # Log description if available
+                if 'description' in data:
+                    logger.info(f"🔍 Scene: {data['description']}")
+                    logger.info(f"⚔️ Combat: {data.get('has_combat', False)}")
+
                 kills = data.get('kills', [])
 
                 logger.info(f"✅ GPT-4o detected {len(kills)} kills")
@@ -178,7 +493,7 @@ class FrameProcessor:
             self.ocr_filter = OCRPreFilter(config.OCR_KEYWORDS)
 
         self.vision = VisionProcessor(
-            api_key=config.OPENROUTER_API_KEY,
+            api_keys=config.API_KEYS,
             model=config.VISION_MODEL
         )
 
@@ -207,9 +522,14 @@ class FrameProcessor:
         # OCR pré-filtro
         if self.ocr_filter and config.OCR_ENABLED:
             has_kill = self.ocr_filter.has_kill_keywords(frame_data)
-            if not has_kill:
+            if has_kill:
+                logger.debug(f"✅ OCR: Frame #{self.frames_received} HAS kill keywords")
+            else:
+                logger.debug(f"❌ OCR: Frame #{self.frames_received} NO kill keywords")
                 self.frames_filtered += 1
                 return None
+        else:
+            logger.debug(f"⚠️ OCR disabled, accepting frame #{self.frames_received}")
 
         # Se passou pelo OCR ou OCR desabilitado, processar
         return frame_data
@@ -268,7 +588,61 @@ class FrameProcessor:
         from src.excel_exporter import ExcelExporter
 
         exporter = ExcelExporter()
-        data = self.tracker.export_to_dict()
 
-        exporter.export(data, filename)
+        # Converter dados do tracker para formato esperado pelo ExcelExporter
+        match_summary = self.tracker.get_match_summary()
+
+        # Montar estrutura de dados no formato esperado
+        match_data = {
+            'total_players': match_summary['total_players'],
+            'total_alive': match_summary['alive'],
+            'total_dead': match_summary['dead'],
+            'total_teams': match_summary['teams'],
+            'total_kills': self.kills_detected,
+            'teams': {},
+            'recent_events': []
+        }
+
+        # Preencher dados dos times
+        for team_name in self.tracker.teams:
+            team_stats = self.tracker.get_team_stats(team_name)
+            team_obj = self.tracker.teams[team_name]
+
+            players_data = []
+            for player_name in team_obj.players:
+                player_obj = self.tracker.players[player_name]
+                players_data.append({
+                    'name': player_obj.name,
+                    'team': player_obj.team,
+                    'kills': player_obj.kills,
+                    'deaths': player_obj.deaths,
+                    'alive': player_obj.alive,
+                    'first_seen': player_obj.first_seen.isoformat() if player_obj.first_seen else '',
+                    'last_seen': player_obj.last_updated.isoformat() if player_obj.last_updated else ''
+                })
+
+            match_data['teams'][team_name] = {
+                'total': team_stats['total'],
+                'alive': team_stats['alive'],
+                'dead': team_stats['dead'],
+                'total_kills': team_stats['total_kills'],
+                'players': players_data
+            }
+
+        # Converter kill history para eventos
+        for kill in self.tracker.kills_history:
+            match_data['recent_events'].append({
+                'event_type': 'kill',
+                'timestamp': kill.get('timestamp', ''),
+                'data': {
+                    'killer': kill.get('killer', '?'),
+                    'victim': kill.get('victim', '?'),
+                    'killer_team': kill.get('killer_team', 'Unknown'),
+                    'victim_team': kill.get('victim_team', 'Unknown'),
+                    'weapon': kill.get('distance', '-')  # "distance" é usado como arma
+                }
+            })
+
+        # Exportar no formato Luis (3 abas: VIVOS, RANKING, KILL FEED)
+        exporter.export_match(match_data, filename, format='luis')
         logger.info(f"📊 Exported to {filename}")

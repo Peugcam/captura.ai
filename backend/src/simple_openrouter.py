@@ -22,7 +22,8 @@ class SimpleOpenRouter:
         model: str,
         messages: list,
         temperature: float = 0.1,
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        timeout: int = 30
     ) -> Dict[str, Any]:
         """
         Call OpenRouter chat completion API
@@ -32,6 +33,7 @@ class SimpleOpenRouter:
             messages: List of message dicts
             temperature: Sampling temperature
             max_tokens: Max response tokens
+            timeout: Request timeout in seconds
 
         Returns:
             Dict with content, usage, model
@@ -55,7 +57,7 @@ class SimpleOpenRouter:
                 f"{self.api_base}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=timeout
             )
 
             response.raise_for_status()
@@ -167,9 +169,15 @@ class SimpleOpenRouter:
 
         logger.info(f"📸 Sending {len(images_base64)} images to {model}")
 
+        # Calcular timeout adaptativo baseado no número de imagens
+        # Base: 10s + 2s por imagem, máximo 30s
+        num_images = len(images_base64)
+        adaptive_timeout = min(10 + (num_images * 2), 30)
+
         return self.chat_completion(
             model=model,
             messages=messages,
             temperature=temperature,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            timeout=adaptive_timeout
         )
