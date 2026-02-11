@@ -18,8 +18,8 @@ from typing import Dict, List, Set, Optional
 from datetime import datetime
 from dataclasses import dataclass, field
 import logging
+import difflib
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +32,7 @@ class Player:
     kills: int = 0
     deaths: int = 0
     last_seen: datetime = field(default_factory=datetime.now)
+    first_seen: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
@@ -103,6 +104,16 @@ class TeamTracker:
             True se registrou com sucesso
         """
         try:
+            # FUZZY MATCHING MELHORADO (com detecção de prefixo de time)
+            # Find existing players with similar names to avoid OCR duplicates
+            # IMPORTANTE: Passar team para detectar "ph13" vs "JTX ph13" como mesmo jogador
+            real_killer_name = self._find_player_fuzzy(killer_name, team=killer_team) or killer_name
+            real_victim_name = self._find_player_fuzzy(victim_name, team=victim_team) or victim_name
+
+            # Use resolved names
+            killer_name = real_killer_name
+            victim_name = real_victim_name
+
             # Criar/atualizar killer
             if killer_name not in self.players:
                 self.players[killer_name] = Player(
@@ -141,6 +152,15 @@ class TeamTracker:
 
             self.teams[killer_team].total_kills += 1
             self.teams[victim_team].total_deaths += 1
+
+            # Verificar duplicata no histórico (segunda camada de proteção)
+            kill_signature = f"{killer_name}:{victim_name}"
+            for existing_kill in reversed(self.kills_history[-20:]):  # Verificar últimas 20 kills
+                if (existing_kill['killer'] == killer_name and
+                    existing_kill['victim'] == victim_name):
+                    # Kill duplicada! Não adicionar ao histórico
+                    logger.warning(f"⚠️ Kill duplicada bloqueada no TeamTracker: {killer_name} -> {victim_name}")
+                    return True  # Retorna True mas não adiciona ao histórico
 
             # Adicionar ao histórico
             kill_record = {
@@ -284,6 +304,108 @@ class TeamTracker:
             'teams': {name: self.get_team_stats(name) for name in self.teams},
             'kills_history': self.kills_history
         }
+
+
+    def _normalize_name(self, name: str, team: str) -> str:
+        """
+        Normaliza nome removendo prefixo de time duplicado
+        Exemplo: "JTX ph13" com team="JTX" → "ph13"
+                 "ph13" com team="JTX" → "ph13"
+
+        Args:
+            name: Nome do jogador
+            team: Time do jogador
+
+        Returns:
+            Nome normalizado sem prefixo duplicado
+        """
+        # Se nome começa com o prefixo do time + espaço, remover
+        if team and name.startswith(f"{team} "):
+            normalized = name[len(team)+1:]  # Remove "TEAM "
+            logger.debug(f"🔧 Normalizando nome: '{name}' -> '{normalized}' (team={team})")
+            return normalized
+
+        return name
+
+    def _find_player_fuzzy(self, name: str, team: str = None, threshold: float = 0.70) -> Optional[str]:
+        """
+        Busca jogador existente com nome similar (Fuzzy Matching)
+        Útil para corrigir erros de OCR (ex: 'Player1' vs 'Player|')
+
+        MELHORADO: Detecta nomes com/sem prefixo de time
+        - "ph13" == "JTX ph13" (mesmo jogador!)
+        - "Kotarav" ~= "Kolarov" (typo de OCR)
+
+        Args:
+            name: Nome para buscar
+            team: Time do jogador (para detectar prefixo duplicado)
+            threshold: Nível de similaridade (0.0 a 1.0)
+
+        Returns:
+            Nome correto existente ou None se não encontrar similar
+        """
+        # Normalizar nome removendo prefixo de time se duplicado
+        normalized_name = self._normalize_name(name, team) if team else name
+
+        # Se nome exato (normalizado) existe, retorna ele
+        if normalized_name in self.players:
+            if normalized_name != name:
+                logger.debug(f"🧩 Match exato após normalização: '{name}' -> '{normalized_name}'")
+            return normalized_name
+
+        # Tentar encontrar com nome original também
+        if name != normalized_name and name in self.players:
+            return name
+
+        # Buscar variantes: nome pode estar registrado COM ou SEM prefixo
+        # Exemplo: procurando "ph13", mas existe "JTX ph13"
+        possible_variants = [
+            normalized_name,  # Nome sem prefixo
+            f"{team} {normalized_name}" if team else normalized_name,  # Nome com prefixo
+        ]
+
+        for variant in possible_variants:
+            if variant in self.players:
+                logger.debug(f"🧩 Match por variante: '{name}' -> '{variant}'")
+                return variant
+
+        # Buscar similar na lista de jogadores existentes (fuzzy)
+        # IMPORTANTE: Só fazer match se for do MESMO TIME!
+        all_names = list(self.players.keys())
+
+        # Filtrar jogadores do mesmo time
+        same_team_names = [
+            p_name for p_name in all_names
+            if team and self.players[p_name].team == team
+        ] if team else all_names
+
+        # Tentar match com nome normalizado (apenas jogadores do mesmo time)
+        matches = difflib.get_close_matches(normalized_name, same_team_names, n=1, cutoff=threshold)
+
+        if matches:
+            similar_name = matches[0]
+            logger.debug(f"🧩 Fuzzy match (mesmo time): '{name}' -> '{similar_name}'")
+            return similar_name
+
+        # Tentar match também com versões normalizadas dos nomes existentes
+        # Para detectar "Kotarav" vs "Kolarov" mesmo com prefixos diferentes
+        # TAMBÉM filtrado por mesmo time!
+        normalized_existing = {}
+        for existing_name in same_team_names:  # Usar same_team_names em vez de all_names
+            # Extrair parte sem prefixo de cada nome existente
+            parts = existing_name.split(" ", 1)
+            base_name = parts[1] if len(parts) > 1 else parts[0]
+            normalized_existing[base_name] = existing_name
+
+        matches = difflib.get_close_matches(normalized_name, normalized_existing.keys(), n=1, cutoff=threshold)
+
+        if matches:
+            base_match = matches[0]
+            original_name = normalized_existing[base_match]
+            logger.debug(f"🧩 Fuzzy match (base name, mesmo time): '{name}' -> '{original_name}' (via '{base_match}')")
+            return original_name
+
+        return None
 
 
 # Função de teste

@@ -104,8 +104,8 @@ class FramePoller:
 
         return []
 
-    async def start_polling(self, callback, interval: float = 1.0):
-        """Start continuous polling"""
+    async def start_polling(self, callback, periodic_check_callback, interval: float = 1.0):
+        """Start continuous polling with periodic flush check"""
         logger.info(f"🔄 Started polling gateway every {interval}s")
 
         while True:
@@ -113,6 +113,10 @@ class FramePoller:
 
             if frames:
                 await callback(frames)
+
+            # CRÍTICO: Verificar flush pendente MESMO quando não há frames novos
+            # Isso garante que frames acumulados sejam processados quando captura para
+            await periodic_check_callback()
 
             await asyncio.sleep(interval)
 
@@ -126,7 +130,11 @@ class GTAAnalyticsBackend:
         self.frame_buffer = []
         self.last_batch_time = time.time()
         self.last_kill_detection_time = None  # Timestamp da última kill detectada
-        self.kill_cooldown = 2.0  # Segundos para esperar após última kill
+        # BUFFER ADAPTATIVO: Ajusta baseado na situação de combate
+        self.kill_cooldown_fast = 0.8  # Kill isolada: processa rápido (0.8s)
+        self.kill_cooldown_slow = 2.0  # Sequência de kills: aguarda mais (2s)
+        self.max_buffer_size = 4  # Máximo de 4 frames antes de processar
+        self.max_wait_timeout = 2.5  # Timeout máximo 2.5s para processar frames pendentes
         self.connection_manager = connection_manager
 
         logger.info("✅ Frame Processor initialized")
@@ -135,64 +143,107 @@ class GTAAnalyticsBackend:
         logger.info(f"   Vision Model: {config.VISION_MODEL}")
         logger.info(f"   Quick Batch: {config.BATCH_SIZE_QUICK} frames / {config.QUICK_BATCH_INTERVAL}s")
         logger.info(f"   Deep Batch: {config.BATCH_SIZE_DEEP} frames / {config.DEEP_BATCH_INTERVAL}s")
-        logger.info(f"   Kill Cooldown: {self.kill_cooldown}s (espera após última kill)")
+        logger.info(f"   Kill Cooldown: {self.kill_cooldown_fast}s (isolada) / {self.kill_cooldown_slow}s (sequência)")
+        logger.info(f"   Max Buffer Size: {self.max_buffer_size} frames (processa antes de encher)")
+        logger.info(f"   Max Wait Timeout: {self.max_wait_timeout}s (força processamento)")
 
     async def process_frames(self, frames: List[Dict]):
         """Process batch of frames"""
-        kills_detected_now = False
-
         for frame in frames:
-            # OCR pre-filtro
-            frame_data = await self.processor.process_frame(frame)
+            # Processa frame com Kill Grouping System
+            kills = await self.processor.process_frame(frame)
 
-            if frame_data:
-                self.frame_buffer.append(frame_data)
-                kills_detected_now = True
+            # Se retornou kills, enviar via WebSocket
+            if kills:
+                await self.broadcast_kills(kills)
 
-        # Se detectou kills nesse batch, atualiza timestamp
-        if kills_detected_now:
-            self.last_kill_detection_time = time.time()
-            logger.info(f"🔍 Kill detected! Buffer: {len(self.frame_buffer)} frames, waiting for cooldown...")
+        # IMPORTANTE: Verificar frames pendentes mesmo quando não chegam frames novos
+        # Isso permite o AUTO-FLUSH funcionar corretamente
+        await self.check_pending_flush()
 
-        # Check se deve processar batch
-        await self.check_batch_processing()
+    async def check_pending_flush(self):
+        """
+        Verifica periodicamente se há frames pendentes para flush automático
+        Isso garante que quando a captura para, processamos em até 0.5s
+        """
+        if self.processor.pending_frames:
+            # Verificar se deve processar (inclui regra de auto-flush)
+            if self.processor._should_process_batch():
+                kills = await self.processor.flush_pending_frames()
+                if kills:
+                    await self.broadcast_kills(kills)
+
+    async def broadcast_kills(self, kills: List[Dict]):
+        """Envia kills detectadas via WebSocket para dashboard"""
+        for kill in kills:
+            event = {
+                'type': 'kill',
+                'data': kill
+            }
+            await self.connection_manager.broadcast(event)
+            logger.info(f"📢 Broadcasting kill: {kill.get('killer')} -> {kill.get('victim')}")
+
+        # Enviar estatísticas completas após cada batch de kills
+        await self.broadcast_stats()
+
+    async def broadcast_stats(self):
+        """Envia estatísticas completas via WebSocket"""
+        try:
+            # Obter estatísticas do TeamTracker
+            stats = self.processor.tracker.get_match_summary()
+
+            event = {
+                'type': 'stats',
+                'data': stats
+            }
+            await self.connection_manager.broadcast(event)
+            logger.debug(f"📊 Broadcasting stats: {stats['total_kills']} kills, {len(stats['teams'])} teams")
+
+        except Exception as e:
+            logger.error(f"Erro ao enviar estatísticas: {e}")
 
     async def check_batch_processing(self):
         """
-        Verifica se deve processar batch com lógica de cooldown inteligente
+        Verifica se deve processar batch com BUFFER ADAPTATIVO INTELIGENTE
 
-        Estratégia:
-        - Se tem frames no buffer E passou o cooldown desde última kill → PROCESSA
-        - Se tem muitos frames (>10) → PROCESSA imediatamente (segurança)
-        - Caso contrário → ESPERA mais kills
+        Estratégia OTIMIZADA baseada no contexto de combate:
+        - Kill isolada (1-2 frames): processa rápido em 0.8s
+        - Sequência (3+ frames): espera 2s para agrupar tudo
+        - Buffer cheio (4 frames): processa imediatamente (segurança)
         """
         if not self.frame_buffer:
             return
 
         current_time = time.time()
+        buffer_size = len(self.frame_buffer)
 
-        # Se tem muitos frames acumulados (>10), processa imediatamente
-        if len(self.frame_buffer) >= 10:
-            logger.info(f"⚡ Buffer cheio ({len(self.frame_buffer)} frames), processando tudo!")
-            await self.process_batch(len(self.frame_buffer))
+        # NÍVEL 1: Buffer cheio (4 frames) → PROCESSA IMEDIATAMENTE
+        if buffer_size >= self.max_buffer_size:
+            logger.info(f"⚡ Buffer cheio ({buffer_size} frames), processando agora!")
+            await self.process_batch(buffer_size)
             return
 
-        # Se detectou kills recentemente
+        # NÍVEL 2: Cooldown ADAPTATIVO baseado no tamanho do buffer
         if self.last_kill_detection_time:
             time_since_last_kill = current_time - self.last_kill_detection_time
 
-            # Se passou o cooldown E tem pelo menos 1 frame → PROCESSA
-            if time_since_last_kill >= self.kill_cooldown and len(self.frame_buffer) >= 1:
-                logger.info(f"⏰ Cooldown finished ({time_since_last_kill:.1f}s), processing {len(self.frame_buffer)} frames!")
-                await self.process_batch(len(self.frame_buffer))
+            # ADAPTATIVO: Kill isolada (1-2 frames) = cooldown rápido (0.8s)
+            #              Sequência (3+ frames) = cooldown lento (2.0s)
+            cooldown = self.kill_cooldown_fast if buffer_size <= 2 else self.kill_cooldown_slow
+
+            # Se passou o cooldown → PROCESSA
+            if time_since_last_kill >= cooldown:
+                kill_type = "isolada" if buffer_size <= 2 else "sequência"
+                logger.info(f"⏰ Cooldown {kill_type} ok ({time_since_last_kill:.1f}s), processando {buffer_size} frames!")
+                await self.process_batch(buffer_size)
                 self.last_kill_detection_time = None  # Reset
                 return
 
-        # Fallback: se passou muito tempo (60s) e tem frames, processa
+        # NÍVEL 3: Timeout de segurança (2.5s) → FORÇA processamento
         elapsed_since_last_batch = current_time - self.last_batch_time
-        if elapsed_since_last_batch >= config.DEEP_BATCH_INTERVAL and len(self.frame_buffer) >= 1:
-            logger.info(f"⏳ Timeout ({elapsed_since_last_batch:.0f}s), processing remaining {len(self.frame_buffer)} frames")
-            await self.process_batch(len(self.frame_buffer))
+        if elapsed_since_last_batch >= self.max_wait_timeout and buffer_size >= 1:
+            logger.info(f"⏳ Timeout ({elapsed_since_last_batch:.1f}s), processando {buffer_size} frames restantes")
+            await self.process_batch(buffer_size)
 
     async def process_batch(self, batch_size: int):
         """Processa batch de frames com GPT-4o e envia eventos via WebSocket"""
@@ -253,8 +304,12 @@ class GTAAnalyticsBackend:
             logger.info("="*60)
 
     async def run_poller(self):
-        """Run frame polling"""
-        await self.poller.start_polling(self.process_frames, config.POLL_INTERVAL)
+        """Run frame polling with periodic flush check"""
+        await self.poller.start_polling(
+            self.process_frames,
+            self.check_pending_flush,
+            config.POLL_INTERVAL
+        )
 
 
 # FastAPI app
@@ -368,6 +423,7 @@ async def export_to_excel(format: str = "luis"):
             "success": True,
             "filename": filename,
             "format": format,
+            "filepath": filepath_abs,
             "size_bytes": os.path.getsize(filepath_abs)
         }
 

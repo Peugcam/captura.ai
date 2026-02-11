@@ -554,7 +554,7 @@ class ExcelExporter:
         })
 
         # 📋 Headers
-        headers = ['#', 'HORA', '🔫 MATOU', 'TIME', '💀', '☠️ MORREU', 'TIME', 'ARMA']
+        headers = ['#', 'HORA', '🔫 MATOU', 'TIME', '💀', '☠️ MORREU', 'TIME', 'TIPO', 'ARMA']
         for col, header in enumerate(headers):
             worksheet.write(0, col, header, header_format)
 
@@ -566,7 +566,8 @@ class ExcelExporter:
         worksheet.set_column(4, 4, 5)   # 💀
         worksheet.set_column(5, 5, 18)  # VICTIM
         worksheet.set_column(6, 6, 12)  # TEAM VICTIM
-        worksheet.set_column(7, 7, 15)  # ARMA
+        worksheet.set_column(7, 7, 12)  # TIPO
+        worksheet.set_column(8, 8, 15)  # ARMA
 
         worksheet.set_row(0, 30)
 
@@ -601,9 +602,27 @@ class ExcelExporter:
                 worksheet.write(row, 5, data.get('victim', '?'), victim_format)
                 worksheet.write(row, 6, data.get('victim_team', '?'), team_format)
 
+                # Tipo de morte
+                kill_type = data.get('kill_type', 'unknown')
+                kill_type_format = workbook.add_format({
+                    'border': 1,
+                    'align': 'center',
+                    'font_size': 10,
+                    'bold': True,
+                    'bg_color': '#FFF3E0' if kill_type == 'weapon' else
+                                '#FFEBEE' if kill_type == 'explosion' else
+                                '#E3F2FD' if kill_type == 'fall' else
+                                '#F3E5F5' if kill_type == 'vehicle' else
+                                '#FCE4EC' if kill_type == 'fire' else
+                                '#E8F5E9' if kill_type == 'melee' else
+                                '#E1F5FE' if kill_type == 'drowning' else
+                                '#CFD8DC'  # unknown/suicide
+                })
+                worksheet.write(row, 7, kill_type.upper(), kill_type_format)
+
                 # Arma
                 weapon = data.get('weapon', '-')
-                worksheet.write(row, 7, weapon, data_format)
+                worksheet.write(row, 8, weapon, data_format)
 
                 worksheet.set_row(row, 24)
                 row += 1
@@ -632,9 +651,71 @@ class ExcelExporter:
             # Top killer team
             if team_kills:
                 top_team = max(team_kills.items(), key=lambda x: x[1])
-                worksheet.merge_range(row, 4, row, 7,
+                worksheet.merge_range(row, 4, row, 8,
                     f"TOP KILLER: {top_team[0]} ({top_team[1]} kills)",
                     summary_format)
+
+            # 📊 ESTATÍSTICAS POR TIPO DE MORTE
+            row += 2
+            stats_header_format = workbook.add_format({
+                'bold': True,
+                'bg_color': '#000000',
+                'font_color': '#FFFF00',
+                'border': 2,
+                'align': 'center',
+                'font_size': 12
+            })
+            worksheet.merge_range(row, 0, row, 8, "📊 ESTATÍSTICAS POR TIPO DE MORTE", stats_header_format)
+
+            row += 1
+
+            # Conta kills por tipo
+            kill_type_counts = {}
+            for event in events:
+                if event.get('event_type') == 'kill':
+                    kill_type = event.get('data', {}).get('kill_type', 'unknown')
+                    kill_type_counts[kill_type] = kill_type_counts.get(kill_type, 0) + 1
+
+            # Cria formatos coloridos para cada tipo
+            type_formats = {
+                'weapon': workbook.add_format({
+                    'bg_color': '#FFF3E0', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'explosion': workbook.add_format({
+                    'bg_color': '#FFEBEE', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'fall': workbook.add_format({
+                    'bg_color': '#E3F2FD', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'vehicle': workbook.add_format({
+                    'bg_color': '#F3E5F5', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'fire': workbook.add_format({
+                    'bg_color': '#FCE4EC', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'melee': workbook.add_format({
+                    'bg_color': '#E8F5E9', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'drowning': workbook.add_format({
+                    'bg_color': '#E1F5FE', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'suicide': workbook.add_format({
+                    'bg_color': '#CFD8DC', 'border': 1, 'align': 'center', 'bold': True
+                }),
+                'unknown': workbook.add_format({
+                    'bg_color': '#F5F5F5', 'border': 1, 'align': 'center', 'bold': True
+                })
+            }
+
+            # Exibe estatísticas por tipo
+            col = 0
+            for kill_type, count in sorted(kill_type_counts.items(), key=lambda x: x[1], reverse=True):
+                type_format = type_formats.get(kill_type, type_formats['unknown'])
+                worksheet.write(row, col, f"{kill_type.upper()}: {count}", type_format)
+                col += 1
+                if col > 8:  # Nova linha a cada 9 tipos
+                    row += 1
+                    col = 0
 
     def _export_advanced(self, workbook, match_data: Dict):
         """Formato avançado com estatísticas extras."""

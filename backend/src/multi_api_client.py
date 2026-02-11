@@ -7,6 +7,7 @@ import requests
 import logging
 from typing import Dict, Any, List
 from itertools import cycle
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,13 @@ class MultiAPIClient:
         # Criar iterador circular para rotação round-robin
         self.client_cycle = cycle(self.clients)
         self.current_client = next(self.client_cycle)
+
+        # CIRCUIT BREAKER (Gemini Optimization)
+        self.consecutive_errors = 0
+        self.circuit_open = False
+        self.last_error_time = 0
+        self.CIRCUIT_THRESHOLD = 5
+        self.COOLDOWN_SECONDS = 60
 
         logger.info(f"🔄 Multi-API Client initialized with {len(self.clients)} keys")
 
@@ -131,6 +139,23 @@ class MultiAPIClient:
     ) -> Dict[str, Any]:
         """Faz chamada à API específica"""
 
+        # Check Circuit Breaker
+        if self.circuit_open:
+            elapsed = time.time() - self.last_error_time
+            if elapsed < self.COOLDOWN_SECONDS:
+                logger.warning(f"🔌 Circuit Breaker OPEN! Skipping call ({int(self.COOLDOWN_SECONDS - elapsed)}s remaining)")
+                return {
+                    "success": False,
+                    "content": "",
+                    "usage": {},
+                    "error": "Circuit Breaker Open",
+                    "api_type": "circuit_breaker"
+                }
+            else:
+                logger.info("🔌 Circuit Breaker cooldown passed. Retrying...")
+                self.circuit_open = False
+                self.consecutive_errors = 0
+
         normalized_model = self._normalize_model(model, client["type"])
 
         headers = {
@@ -169,6 +194,10 @@ class MultiAPIClient:
 
             logger.debug(f"✅ {client['type']} API success")
 
+            # Reset circuit breaker on success
+            self.consecutive_errors = 0
+            self.circuit_open = False
+
             return {
                 "success": True,
                 "content": content,
@@ -183,6 +212,14 @@ class MultiAPIClient:
 
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ {client['type']} API error: {e}")
+            
+            # Update Circuit Breaker
+            self.consecutive_errors += 1
+            self.last_error_time = time.time()
+            if self.consecutive_errors >= self.CIRCUIT_THRESHOLD:
+                self.circuit_open = True
+                logger.critical(f"🔌 CIRCUIT BREAKER TRIPPED! Too many errors ({self.consecutive_errors}). Pausing for {self.COOLDOWN_SECONDS}s")
+
             return {
                 "success": False,
                 "content": "",
