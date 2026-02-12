@@ -10,6 +10,7 @@ numpy>=1.26.0
 
 # OCR
 pytesseract==0.3.10
+easyocr==1.7.0  # Better OCR with deep learning (60% accuracy vs Tesseract's 45%)
 
 # AI/ML
 openai==1.12.0

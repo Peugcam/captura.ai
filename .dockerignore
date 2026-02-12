@@ -1,0 +1,77 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+venv
+env
+ENV
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Exports (keep structure, not data)
+backend/exports/*.xlsx
+backend/exports/*.pdf
+
+# Test files
+test_*.py
+*_test.go
+
+# Documentation
+README.md
+docs/
+*.md
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Environment
+.env
+.env.local
+*.env
+
+# Temporary
+tmp/
+temp/
+*.tmp

@@ -1,0 +1,71 @@
+# Fly.io configuration for GTA Analytics Gateway
+# Deploy: fly deploy --config gateway/fly.toml
+
+app = "gta-analytics-gateway"
+primary_region = "gru"  # São Paulo, Brazil
+
+# Build configuration
+[build]
+  dockerfile = "Dockerfile"
+
+# Environment variables
+[env]
+  BUFFER_SIZE = "200"
+  DEBUG = "false"
+
+# HTTP service configuration
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # HTTP/WebSocket ports
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  # Health checks
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 800
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "15s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+
+# WebRTC UDP ports (for future use)
+# Note: Fly.io UDP support requires special configuration
+# [[services]]
+#   internal_port = 50000
+#   protocol = "udp"
+#
+#   [[services.ports]]
+#     port = 50000
+
+# VM resources
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+# Metrics
+[metrics]
+  port = 9091
+  path = "/metrics"

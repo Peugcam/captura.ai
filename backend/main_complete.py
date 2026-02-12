@@ -18,6 +18,7 @@ import logging
 import time
 from typing import List, Dict
 from datetime import datetime
+from collections import deque
 import config
 from processor import FrameProcessor
 
@@ -56,6 +57,11 @@ class FramePoller:
 
         return []
 
+    async def close(self):
+        """Close the HTTP client to release connections"""
+        await self.client.aclose()
+        logger.info("🔌 HTTP client closed")
+
     async def start_polling(self, callback, interval: float = 1.0):
         """Start continuous polling"""
         logger.info(f"🔄 Started polling gateway every {interval}s")
@@ -75,7 +81,11 @@ class GTAAnalyticsBackend:
     def __init__(self):
         self.poller = FramePoller(config.GATEWAY_URL)
         self.processor = FrameProcessor()
-        self.frame_buffer = []
+        # BACKPRESSURE (Gemini Optimization): Limit buffer size
+        # 30 frames max to prevent OOM. Drops older frames if full.
+        self.frame_buffer = deque(maxlen=30)
+        self.frames_dropped_buffer = 0
+        
         self.last_batch_time = time.time()
 
         logger.info("✅ Frame Processor initialized")
@@ -93,6 +103,7 @@ class GTAAnalyticsBackend:
 
             if frame_data:
                 self.frame_buffer.append(frame_data)
+                # deque(maxlen=30) auto-drops oldest when full
 
         # Check se deve processar batch
         await self.check_batch_processing()
@@ -116,8 +127,10 @@ class GTAAnalyticsBackend:
             return
 
         # Pegar batch
-        batch = self.frame_buffer[:batch_size]
-        self.frame_buffer = self.frame_buffer[batch_size:]
+        batch = list(self.frame_buffer)[:batch_size]
+        # Remove consumed items from deque
+        for _ in range(min(batch_size, len(self.frame_buffer))):
+            self.frame_buffer.popleft()
 
         logger.info(f"🔄 Processing batch of {len(batch)} frames...")
 
@@ -188,5 +201,11 @@ if __name__ == "__main__":
             logger.info(f"✅ Results exported to: {filename}")
         except Exception as e:
             logger.error(f"Export error: {e}")
+
+        # Close HTTP client to prevent connection leaks
+        try:
+            asyncio.get_event_loop().run_until_complete(backend.poller.close())
+        except Exception:
+            pass
 
         logger.info("👋 Goodbye!")

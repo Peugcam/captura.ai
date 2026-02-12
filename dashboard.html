@@ -246,6 +246,20 @@
         </div>
 
         <div class="log">
+            <h2>👥 Times (Vivos/Total)</h2>
+            <div class="log-content" id="teamsContent">
+                <div class="log-entry">Aguardando dados dos times...</div>
+            </div>
+        </div>
+
+        <div class="log">
+            <h2>🏆 Ranking de Jogadores</h2>
+            <div class="log-content" id="rankingContent">
+                <div class="log-entry">Aguardando kills...</div>
+            </div>
+        </div>
+
+        <div class="log">
             <h2>📋 Log de Eventos</h2>
             <div class="log-content" id="logContent">
                 <div class="log-entry">Aguardando início da captura...</div>
@@ -275,6 +289,7 @@
 
     <script>
         let ws = null;
+        let analyticsWs = null;
         let capturing = false;
         let frameCount = 0;
         let eventCount = 0;
@@ -283,6 +298,7 @@
         let statsInterval = null;
 
         const GATEWAY_WS = 'ws://localhost:8000/ws';
+        const ANALYTICS_WS = 'ws://localhost:3000/events';
 
         function addLog(message, type = 'info') {
             const logContent = document.getElementById('logContent');
@@ -450,6 +466,91 @@
             addLog('⏹️ Captura parada');
             addLog(`📊 Resumo: ${frameCount} frames capturados`);
         }
+
+        // Atualizar painéis de estatísticas em tempo real
+        function updateStats(stats) {
+            // Atualizar painel de TIMES
+            const teamsContent = document.getElementById('teamsContent');
+            teamsContent.innerHTML = '';
+
+            if (stats.teams && stats.teams.length > 0) {
+                stats.teams.forEach(team => {
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry';
+                    const aliveColor = team.alive > 0 ? '#4ade80' : '#ef4444';
+                    entry.innerHTML = `<strong style="color: ${aliveColor}">${team.name}</strong>: ${team.alive} vivos / ${team.total} total (${team.kills} kills)`;
+                    teamsContent.appendChild(entry);
+                });
+            } else {
+                teamsContent.innerHTML = '<div class="log-entry">Aguardando dados dos times...</div>';
+            }
+
+            // Atualizar painel de RANKING
+            const rankingContent = document.getElementById('rankingContent');
+            rankingContent.innerHTML = '';
+
+            if (stats.leaderboard && stats.leaderboard.length > 0) {
+                stats.leaderboard.slice(0, 10).forEach((player, idx) => {
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry';
+                    const statusIcon = player.alive ? '🟢' : '🔴';
+                    entry.innerHTML = `${idx + 1}. ${statusIcon} <strong>${player.name}</strong> (${player.team}) - ${player.kills} kills / ${player.deaths} deaths`;
+                    rankingContent.appendChild(entry);
+                });
+            } else {
+                rankingContent.innerHTML = '<div class="log-entry">Aguardando kills...</div>';
+            }
+        }
+
+        // Conectar ao Backend Analytics WebSocket para receber kills em tempo real
+        function connectAnalyticsWebSocket() {
+            try {
+                analyticsWs = new WebSocket(ANALYTICS_WS);
+
+                analyticsWs.onopen = () => {
+                    addLog('🎯 Conectado ao Backend Analytics (detecção de kills)');
+                };
+
+                analyticsWs.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+
+                    if (message.type === 'kill') {
+                        const kill = message.data;
+                        eventCount++;
+                        document.getElementById('eventCount').textContent = eventCount;
+
+                        // Log formatado da kill
+                        const killType = kill.kill_type ? ` [${kill.kill_type.toUpperCase()}]` : '';
+                        const distance = kill.distance ? ` (${kill.distance})` : '';
+                        const logMessage = `💀 ${kill.killer} (${kill.killer_team}) → ${kill.victim} (${kill.victim_team})${killType}${distance}`;
+                        addLog(logMessage);
+                    }
+
+                    // Atualizar estatísticas ao vivo
+                    if (message.type === 'stats') {
+                        updateStats(message.data);
+                    }
+                };
+
+                analyticsWs.onerror = (error) => {
+                    addLog('❌ Erro no Analytics WebSocket', 'error');
+                };
+
+                analyticsWs.onclose = () => {
+                    addLog('🔌 Desconectado do Backend Analytics');
+                    // Tentar reconectar após 3 segundos
+                    setTimeout(connectAnalyticsWebSocket, 3000);
+                };
+
+            } catch (error) {
+                addLog(`❌ Erro ao conectar Analytics WebSocket: ${error.message}`, 'error');
+            }
+        }
+
+        // Conectar automaticamente ao carregar a página
+        window.addEventListener('DOMContentLoaded', () => {
+            connectAnalyticsWebSocket();
+        });
     </script>
 </body>
 </html>

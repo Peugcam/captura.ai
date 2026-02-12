@@ -549,17 +549,21 @@
             <div style="flex: 1;"></div>
 
             <div class="control-group">
-                <button class="btn btn-start" id="btnStart" onclick="startCapture()">
+                <button class="btn btn-start" id="btnStart">
                     <span>▶️</span>
                     <span>Iniciar</span>
                 </button>
-                <button class="btn btn-stop" id="btnStop" onclick="stopCapture()" disabled>
+                <button class="btn btn-stop" id="btnStop" disabled>
                     <span>⏹️</span>
                     <span>Parar</span>
                 </button>
-                <button class="btn btn-reset" id="btnReset" onclick="resetDashboard()">
+                <button class="btn btn-reset" id="btnReset">
                     <span>🔄</span>
                     <span>Reset</span>
+                </button>
+                <button class="btn btn-primary" id="btnExport">
+                    <span>📊</span>
+                    <span>Exportar Excel</span>
                 </button>
             </div>
         </div>
@@ -577,8 +581,24 @@
         let mediaStream = null;
         let videoElement = null;
 
-        const GATEWAY_WS = 'ws://localhost:8000/ws';
-        const ANALYTICS_WS = 'ws://localhost:3000/events';
+        // AUTO-DETECT: localhost ou produção (PADRÃO NASA)
+        const getWebSocketUrl = (path) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+
+            // Se estiver em localhost, usar porta 3000
+            if (host === 'localhost' || host === '127.0.0.1') {
+                return `${protocol}//${host}:3000${path}`;
+            }
+
+            // Em produção, usar o mesmo host do site
+            return `${protocol}//${host}${path}`;
+        };
+
+        const CAPTURE_WS = getWebSocketUrl('/capture');
+        const ANALYTICS_WS = getWebSocketUrl('/events');
+
+        console.log('🌐 WebSocket URLs:', { CAPTURE_WS, ANALYTICS_WS });
 
         // Conectar ao Backend Analytics automaticamente
         function connectAnalyticsWebSocket() {
@@ -714,67 +734,89 @@
         }
 
         async function startCapture() {
-            if (capturing) return;
+            console.log('🎬 startCapture() chamado!');
+
+            if (capturing) {
+                console.log('⚠️ Já está capturando!');
+                return;
+            }
 
             frameCount = 0;
             killCount = 0;
             startTime = Date.now();
 
-            ws = new WebSocket(GATEWAY_WS);
+            try {
+                // Conectar WebSocket
+                console.log('📡 Conectando WebSocket...');
+                ws = new WebSocket(CAPTURE_WS);
 
-            ws.onopen = async () => {
-                document.getElementById('gatewayStatus').className = 'status-badge connected';
-                ws.send(JSON.stringify({ type: 'start_capture' }));
+                ws.onopen = async () => {
+                    console.log('✅ WebSocket conectado!');
+                    document.getElementById('gatewayStatus').className = 'status-badge connected';
+                    ws.send(JSON.stringify({ type: 'start_capture' }));
 
-                try {
-                    mediaStream = await navigator.mediaDevices.getDisplayMedia({
-                        video: { mediaSource: 'screen' }
-                    });
+                    try {
+                        // Pedir permissão de captura
+                        console.log('🎥 Pedindo permissão de captura...');
+                        mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: { mediaSource: 'screen' }
+                        });
 
-                    videoElement = document.getElementById('previewVideo');
-                    videoElement.srcObject = mediaStream;
+                        console.log('✅ Permissão concedida!');
 
-                    // Aguardar stream carregar antes de mostrar
-                    videoElement.onloadedmetadata = () => {
-                        videoElement.play();
-                        videoElement.style.display = 'block';
-                        document.getElementById('previewPlaceholder').style.display = 'none';
-                        console.log('✅ Vídeo carregado e exibido!');
-                    };
+                        videoElement = document.getElementById('previewVideo');
+                        videoElement.srcObject = mediaStream;
 
-                    mediaStream.getVideoTracks()[0].onended = () => {
-                        stopCapture();
-                    };
+                        // Aguardar stream carregar antes de mostrar
+                        videoElement.onloadedmetadata = () => {
+                            videoElement.play();
+                            videoElement.style.display = 'block';
+                            document.getElementById('previewPlaceholder').style.display = 'none';
+                            console.log('✅ Vídeo carregado e exibido!');
+                        };
 
-                    capturing = true;
-                    document.getElementById('btnStart').disabled = true;
-                    document.getElementById('btnStop').disabled = false;
+                        mediaStream.getVideoTracks()[0].onended = () => {
+                            console.log('⚠️ Stream encerrado pelo usuário');
+                            stopCapture();
+                        };
 
-                    const fps = 2;
-                    const interval = 1000 / fps;
+                        capturing = true;
+                        document.getElementById('btnStart').disabled = true;
+                        document.getElementById('btnStop').disabled = false;
 
-                    captureInterval = setInterval(() => {
-                        captureFrame();
-                    }, interval);
+                        const fps = 2;
+                        const interval = 1000 / fps;
 
-                    statsInterval = setInterval(() => {
-                        const elapsed = (Date.now() - startTime) / 1000;
-                        document.getElementById('captureTime').textContent = elapsed.toFixed(0) + 's';
-                    }, 1000);
+                        console.log(`✅ Iniciando captura a ${fps} FPS`);
 
-                } catch (error) {
-                    console.error('Screen share error:', error);
-                    stopCapture();
-                }
-            };
+                        captureInterval = setInterval(() => {
+                            captureFrame();
+                        }, interval);
 
-            ws.onerror = () => {
-                document.getElementById('gatewayStatus').className = 'status-badge disconnected';
-            };
+                        statsInterval = setInterval(() => {
+                            const elapsed = (Date.now() - startTime) / 1000;
+                            document.getElementById('captureTime').textContent = elapsed.toFixed(0) + 's';
+                        }, 1000);
 
-            ws.onclose = () => {
-                document.getElementById('gatewayStatus').className = 'status-badge disconnected';
-            };
+                    } catch (error) {
+                        console.error('❌ Erro ao obter captura de tela:', error);
+                        if (ws) ws.close();
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ Erro no WebSocket:', error);
+                    document.getElementById('gatewayStatus').className = 'status-badge disconnected';
+                };
+
+                ws.onclose = () => {
+                    console.log('⚠️ WebSocket fechado');
+                    document.getElementById('gatewayStatus').className = 'status-badge disconnected';
+                };
+
+            } catch (error) {
+                console.error('❌ Erro ao iniciar captura:', error);
+            }
         }
 
         function captureFrame() {
@@ -815,7 +857,12 @@
         }
 
         function stopCapture() {
-            if (!capturing) return;
+            console.log('⏹️ stopCapture() chamado!');
+
+            if (!capturing) {
+                console.log('⚠️ Não está capturando!');
+                return;
+            }
 
             clearInterval(captureInterval);
             clearInterval(statsInterval);
@@ -823,21 +870,28 @@
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
-                videoElement.style.display = 'none';
+                if (videoElement) {
+                    videoElement.style.display = 'none';
+                }
                 document.getElementById('previewPlaceholder').style.display = 'block';
+                console.log('✅ Stream parado');
             }
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'stop_capture' }));
                 ws.close();
+                console.log('✅ WebSocket fechado');
             }
 
             capturing = false;
             document.getElementById('btnStart').disabled = false;
             document.getElementById('btnStop').disabled = true;
+            console.log('✅ Captura parada!');
         }
 
         function resetDashboard() {
+            console.log('🔄 resetDashboard() chamado!');
+
             document.getElementById('killFeedContent').innerHTML = '<div class="empty-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><div>Aguardando eventos de combate...</div></div>';
             document.getElementById('teamsContent').innerHTML = '<div class="empty-state"><div>Aguardando dados...</div></div>';
             document.getElementById('rankingContent').innerHTML = '<div class="empty-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><div>Aguardando kills...</div></div>';
@@ -846,12 +900,74 @@
             document.getElementById('frameCount').textContent = '0';
             document.getElementById('killCount').textContent = '0';
             document.getElementById('captureTime').textContent = '0s';
+            console.log('✅ Dashboard resetado!');
         }
 
-        // Conectar automaticamente ao carregar
+        // Função de exportar para Excel
+        async function exportToExcel() {
+            try {
+                const response = await fetch('http://localhost:3000/export');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gta_analytics_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                console.log('✅ Planilha exportada!');
+            } catch (error) {
+                console.error('❌ Erro ao exportar:', error);
+                alert('Erro ao exportar planilha. Verifique se o backend está rodando.');
+            }
+        }
+
+        // Conectar automaticamente ao carregar e configurar botões
         window.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Dashboard carregado!');
+
             connectAnalyticsWebSocket();
+
+            // Event listeners dos botões
+            const btnStart = document.getElementById('btnStart');
+            const btnStop = document.getElementById('btnStop');
+            const btnReset = document.getElementById('btnReset');
+            const btnExport = document.getElementById('btnExport');
+
+            console.log('Botões encontrados:', { btnStart, btnStop, btnReset, btnExport });
+
+            if (btnStart) {
+                btnStart.addEventListener('click', () => {
+                    console.log('🎬 Botão Iniciar clicado!');
+                    startCapture();
+                });
+            }
+
+            if (btnStop) {
+                btnStop.addEventListener('click', () => {
+                    console.log('⏹️ Botão Parar clicado!');
+                    stopCapture();
+                });
+            }
+
+            if (btnReset) {
+                btnReset.addEventListener('click', () => {
+                    console.log('🔄 Botão Reset clicado!');
+                    resetDashboard();
+                });
+            }
+
+            if (btnExport) {
+                btnExport.addEventListener('click', () => {
+                    console.log('📊 Botão Export clicado!');
+                    exportToExcel();
+                });
+            }
+
+            console.log('✅ Event listeners configurados!');
         });
     </script>
 </body>
 </html>
+<!-- Cache bust 1770908629 -->

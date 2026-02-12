@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GTA Analytics - Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1d24;
+            color: white;
+            padding: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2a2d35;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 GTA Analytics - Teste Simples</h1>
+
+    <div id="status">
+        <p>Backend: <span id="backendStatus">Conectando...</span></p>
+        <p>Frames enviados: <span id="frameCount">0</span></p>
+        <p>Kills detectadas: <span id="killCount">0</span></p>
+    </div>
+
+    <button id="btnStart">▶️ Iniciar Captura</button>
+    <button id="btnStop" disabled>⏹️ Parar Captura</button>
+    <button id="btnExport">📊 Exportar Excel</button>
+
+    <div id="console" style="margin-top: 20px; padding: 20px; background: #000; border-radius: 8px; font-family: monospace; font-size: 12px;">
+        <p>Console de Debug:</p>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        // Log helper
+        function log(message) {
+            const logsDiv = document.getElementById('logs');
+            const time = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `<p style="margin: 5px 0;">[${time}] ${message}</p>`;
+            console.log(message);
+        }
+
+        log('🚀 Dashboard iniciado!');
+
+        // Variáveis globais
+        let ws = null;
+        let analyticsWs = null;
+        let capturing = false;
+        let frameCount = 0;
+        let mediaStream = null;
+        let captureInterval = null;
+
+        // WebSocket URLs
+        const CAPTURE_WS = 'ws://localhost:3000/capture';
+        const ANALYTICS_WS = 'ws://localhost:3000/events';
+        const EXPORT_URL = 'http://localhost:3000/export';
+
+        log(`📡 CAPTURE_WS: ${CAPTURE_WS}`);
+        log(`📡 ANALYTICS_WS: ${ANALYTICS_WS}`);
+
+        // Conectar ao backend (analytics)
+        function connectAnalytics() {
+            try {
+                analyticsWs = new WebSocket(ANALYTICS_WS);
+
+                analyticsWs.onopen = () => {
+                    log('✅ Conectado ao backend (analytics)');
+                    document.getElementById('backendStatus').textContent = '✅ Conectado';
+                };
+
+                analyticsWs.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    log(`📨 Mensagem recebida: ${msg.type}`);
+
+                    if (msg.type === 'kill') {
+                        const kills = parseInt(document.getElementById('killCount').textContent) + 1;
+                        document.getElementById('killCount').textContent = kills;
+                        log(`💀 Kill detectada: ${msg.data.killer} → ${msg.data.victim}`);
+                    }
+                };
+
+                analyticsWs.onerror = (error) => {
+                    log('❌ Erro no WebSocket analytics');
+                    document.getElementById('backendStatus').textContent = '❌ Erro';
+                };
+
+                analyticsWs.onclose = () => {
+                    log('⚠️ WebSocket analytics desconectado');
+                    document.getElementById('backendStatus').textContent = '⚠️ Desconectado';
+                    setTimeout(connectAnalytics, 3000);
+                };
+
+            } catch (error) {
+                log(`❌ Erro ao conectar: ${error.message}`);
+            }
+        }
+
+        // Iniciar captura
+        async function startCapture() {
+            log('🎬 Botão Iniciar clicado!');
+
+            if (capturing) {
+                log('⚠️ Já está capturando!');
+                return;
+            }
+
+            try {
+                // Conectar WebSocket de captura
+                log('📡 Conectando ao WebSocket de captura...');
+                ws = new WebSocket(CAPTURE_WS);
+
+                ws.onopen = async () => {
+                    log('✅ WebSocket de captura conectado!');
+                    ws.send(JSON.stringify({ type: 'start_capture' }));
+
+                    try {
+                        log('🎥 Pedindo permissão de captura de tela...');
+                        mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: { mediaSource: 'screen' }
+                        });
+
+                        log('✅ Permissão concedida! Iniciando captura...');
+                        capturing = true;
+                        document.getElementById('btnStart').disabled = true;
+                        document.getElementById('btnStop').disabled = false;
+
+                        // Capturar a 2 FPS
+                        captureInterval = setInterval(() => {
+                            captureFrame();
+                        }, 500);
+
+                    } catch (error) {
+                        log(`❌ Erro ao obter captura de tela: ${error.message}`);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    log('❌ Erro no WebSocket de captura');
+                };
+
+                ws.onclose = () => {
+                    log('⚠️ WebSocket de captura fechado');
+                };
+
+            } catch (error) {
+                log(`❌ Erro ao iniciar captura: ${error.message}`);
+            }
+        }
+
+        // Capturar frame
+        function captureFrame() {
+            if (!mediaStream) return;
+
+            try {
+                const video = document.createElement('video');
+                video.srcObject = mediaStream;
+                video.play();
+
+                video.onloadedmetadata = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1920;
+                    canvas.height = 1080;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    canvas.toBlob((blob) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64 = reader.result.split(',')[1];
+                            sendFrame(base64);
+                        };
+                        reader.readAsDataURL(blob);
+                    }, 'image/jpeg', 0.6);
+                };
+
+            } catch (error) {
+                log(`❌ Erro ao capturar frame: ${error.message}`);
+            }
+        }
+
+        // Enviar frame
+        function sendFrame(frameData) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'frame',
+                    data: frameData,
+                    timestamp: Date.now()
+                }));
+                frameCount++;
+                document.getElementById('frameCount').textContent = frameCount;
+
+                if (frameCount % 10 === 0) {
+                    log(`📸 ${frameCount} frames enviados`);
+                }
+            }
+        }
+
+        // Parar captura
+        function stopCapture() {
+            log('⏹️ Parando captura...');
+
+            clearInterval(captureInterval);
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            if (ws) {
+                ws.send(JSON.stringify({ type: 'stop_capture' }));
+                ws.close();
+                ws = null;
+            }
+
+            capturing = false;
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+
+            log('✅ Captura parada!');
+        }
+
+        // Exportar Excel
+        async function exportExcel() {
+            log('📊 Exportando para Excel...');
+
+            try {
+                const response = await fetch(EXPORT_URL);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gta_analytics_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                log('✅ Excel exportado com sucesso!');
+            } catch (error) {
+                log(`❌ Erro ao exportar: ${error.message}`);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('btnStart').addEventListener('click', startCapture);
+        document.getElementById('btnStop').addEventListener('click', stopCapture);
+        document.getElementById('btnExport').addEventListener('click', exportExcel);
+
+        // Conectar ao analytics automaticamente
+        connectAnalytics();
+
+        log('✅ Event listeners configurados!');
+    </script>
+</body>
+</html>

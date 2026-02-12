@@ -23,7 +23,7 @@ from typing import List, Dict, Set
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import uvicorn
 import config
 from processor import FrameProcessor
@@ -373,6 +373,24 @@ async def get_stats():
     return {"error": "Backend not initialized"}
 
 
+@app.get("/player")
+async def serve_player_dashboard():
+    """Serve dashboard minimalista para o jogador"""
+    dashboard_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard-player.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard do jogador não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/viewer")
+async def serve_viewer_dashboard():
+    """Serve dashboard completo para o estrategista"""
+    dashboard_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard-viewer.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard do estrategista não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
 @app.post("/export")
 async def export_to_excel(format: str = "luis"):
     """
@@ -454,6 +472,59 @@ async def reset_stats():
     except Exception as e:
         logger.error(f"Erro ao resetar: {e}")
         return {"error": str(e)}
+
+
+@app.websocket("/capture")
+async def capture_endpoint(websocket: WebSocket):
+    """WebSocket endpoint para RECEBER frames do browser (modo híbrido com Gateway)"""
+    await websocket.accept()
+    logger.info("📹 Browser connected for frame capture")
+
+    frame_count = 0
+
+    try:
+        while True:
+            # Receber frame do browser
+            data = await websocket.receive_json()
+
+            if data.get("type") == "frame":
+                frame_count += 1
+                frame_data = {
+                    "data": data.get("data"),
+                    "timestamp": data.get("timestamp", time.time()),
+                    "number": frame_count
+                }
+
+                logger.info(f"📸 Frame {frame_count} received from browser")
+
+                # Processar frame no backend
+                if backend:
+                    # Adicionar ao buffer do backend para processamento
+                    await backend.process_frames([frame_data])
+
+                    # Enviar ACK de volta
+                    await websocket.send_json({
+                        "type": "ack",
+                        "frame": frame_count,
+                        "timestamp": time.time()
+                    })
+                else:
+                    logger.error("❌ Backend not initialized!")
+
+            elif data.get("type") == "start_capture":
+                logger.info("▶️  Browser started capture")
+                frame_count = 0
+
+            elif data.get("type") == "stop_capture":
+                logger.info("⏹️  Browser stopped capture")
+                break
+
+    except WebSocketDisconnect:
+        logger.info(f"📹 Browser disconnected (processed {frame_count} frames)")
+    except Exception as e:
+        logger.error(f"❌ Error in capture endpoint: {e}")
+    finally:
+        logger.info(f"✅ Capture session ended: {frame_count} frames processed")
 
 
 @app.websocket("/events")

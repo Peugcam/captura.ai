@@ -70,21 +70,34 @@ class GTAAnalyticsBackend:
 
     def __init__(self):
         self.poller = FramePoller(config.GATEWAY_URL)
-        self.frame_queue = asyncio.Queue()
+        # BACKPRESSURE (Gemini Optimization): Limit queue size to prevent OOM
+        # 30 frames @ 1FPS processing = 30s buffer. Drops older frames if full.
+        self.frame_queue = asyncio.Queue(maxsize=30)
         self.executor = ThreadPoolExecutor(max_workers=config.OCR_WORKERS)
 
         # Stats
         self.stats = {
             'frames_received': 0,
             'frames_processed': 0,
+            'frames_dropped_queue': 0,
             'kills_detected': 0
         }
 
     async def process_frames(self, frames: List[Dict]):
-        """Process batch of frames"""
+        """
+        Process batch of frames with Backpressure
+        If queue is full, new frames are dropped to prioritize real-time processing
+        """
         for frame in frames:
-            await self.frame_queue.put(frame)
-            self.stats['frames_received'] += 1
+            try:
+                # Try to put frame in queue without blocking
+                self.frame_queue.put_nowait(frame)
+                self.stats['frames_received'] += 1
+            except asyncio.QueueFull:
+                # Queue is full! Drop frame to catch up with real-time
+                self.stats['frames_dropped_queue'] += 1
+                if self.stats['frames_dropped_queue'] % 10 == 0:
+                    logger.warning(f"⚠️ Backpressure active! Dropped {self.stats['frames_dropped_queue']} frames. Processing too slow?")
 
     async def worker(self):
         """Frame processing worker"""

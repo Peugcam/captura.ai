@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gta-gateway
+    ports:
+      - "8000:8000"
+      - "50000-50100:50000-50100/udp"  # WebRTC UDP ports
+    environment:
+      - DEBUG=false
+      - BUFFER_SIZE=200
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - gta-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gta-backend
+    ports:
+      - "3000:3000"
+    environment:
+      # Gateway connection
+      - GATEWAY_URL=http://gateway:8000
+      - GATEWAY_IPC_MODE=http  # Use 'unix' for Unix sockets in production
+
+      # Game configuration
+      - GAME_TYPE=gta
+      - ENABLE_OCR_FILTER=true
+      - ENABLE_ROI=true
+      - ROI_X=0.75
+      - ROI_Y=0
+      - ROI_WIDTH=0.25
+      - ROI_HEIGHT=0.35
+
+      # Advanced prompt (optional)
+      - USE_ADVANCED_PROMPT=false
+
+      # LiteLLM configuration (to be added)
+      - USE_LITELLM=false
+
+      # API Keys (use .env file or secrets in production)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+    volumes:
+      - ./backend/exports:/app/exports
+      - ./backend/prompts:/app/prompts
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - gta-network
+
+  # Dashboard (optional, can be served via nginx or directly)
+  # dashboard:
+  #   image: nginx:alpine
+  #   container_name: gta-dashboard
+  #   ports:
+  #     - "8080:80"
+  #   volumes:
+  #     - ./dashboard-v2.html:/usr/share/nginx/html/index.html:ro
+  #   networks:
+  #     - gta-network
+
+networks:
+  gta-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  exports:
+    driver: local

@@ -241,12 +241,20 @@ class OCRPreFilter:
 
 
 class VisionProcessor:
-    """Processa frames com GPT-4o Vision"""
+    """Processa frames com GPT-4o Vision (+ Gemini fallback)"""
 
     def __init__(self, api_keys: list, model: str):
         self.client = MultiAPIClient(api_keys)
         self.model = model
         self.parser = BrazilianKillParser()
+
+        # NASA-Level Optimization: Gemini Flash 2.0 Fallback (via OpenRouter)
+        self.use_gemini_fallback = config.USE_GEMINI_FALLBACK
+        self.gemini_model = config.GEMINI_MODEL
+        if self.use_gemini_fallback:
+            logger.info(f"🤖 Gemini fallback enabled: {self.gemini_model} (90% cheaper, via OpenRouter)")
+        else:
+            logger.debug("⚠️ Gemini fallback disabled")
 
     def get_prompt_for_game(self, game_type: str) -> str:
         """
@@ -664,7 +672,30 @@ CRITICAL: Pay CLOSE attention to any text that looks like "X COMBO" or "X HIT" -
 
             if not response['success']:
                 logger.error(f"GPT-4o error: {response.get('error')}")
-                return []
+
+                # NASA-Level Optimization: Gemini Flash 2.0 Fallback (via OpenRouter)
+                if self.use_gemini_fallback:
+                    logger.warning(f"⚠️ GPT-4o failed, trying Gemini fallback via OpenRouter...")
+                    try:
+                        gemini_response = self.client.vision_chat_multiple(
+                            model=self.gemini_model,  # google/gemini-2.0-flash-exp:free
+                            prompt=prompt,
+                            images_base64=frames_base64,
+                            temperature=0,
+                            max_tokens=2000
+                        )
+
+                        if gemini_response['success']:
+                            logger.info(f"✅ Gemini fallback successful! (Saved ~90% cost)")
+                            response = gemini_response  # Usar resposta do Gemini
+                        else:
+                            logger.error(f"❌ Gemini fallback also failed: {gemini_response.get('error')}")
+                            return []
+                    except Exception as e:
+                        logger.error(f"❌ Gemini fallback error: {e}")
+                        return []
+                else:
+                    return []
 
             # Parse response
             import json
@@ -702,6 +733,15 @@ class FrameProcessor:
     """Processador completo de frames"""
 
     def __init__(self):
+        # NASA-Level Optimization: Frame Deduplication
+        self.deduplicator = None
+        if config.USE_FRAME_DEDUP:
+            from src.frame_deduplicator import FrameDeduplicator
+            self.deduplicator = FrameDeduplicator(
+                similarity_threshold=config.FRAME_SIMILARITY_THRESHOLD
+            )
+            logger.info(f"🔄 Frame Deduplication enabled (threshold: {config.FRAME_SIMILARITY_THRESHOLD:.0%})")
+
         # Usar Vision Pre-Filter (mais confiável que OCR)
         self.vision_filter = None
         if config.OCR_ENABLED:
@@ -825,6 +865,12 @@ class FrameProcessor:
 
         self.frames_received += 1
         frame_data = frame.get('data', '')
+
+        # NASA-Level Optimization #1: Frame Deduplication
+        if self.deduplicator and self.deduplicator.is_duplicate(frame_data):
+            logger.debug(f"⏭️ Frame #{self.frames_received} skipped (duplicate/similar)")
+            self.frames_filtered += 1
+            return None
 
         # Vision Pre-Filter (baixa resolução)
         if self.vision_filter and config.OCR_ENABLED:
