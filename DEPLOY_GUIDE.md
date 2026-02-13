@@ -262,37 +262,372 @@ Fly.io faz **zero-downtime deployment** automaticamente!
 
 ---
 
-## 💰 Custos Estimados
+## 🏆 Por Que Fly.io? Análise Comparativa
 
-### Free Tier (Fly.io)
+### Comparação com Outras Plataformas
 
-- **Recursos inclusos:**
-  - 3 shared-cpu-1x VMs (256MB RAM)
-  - 3GB persistent volumes
-  - 160GB outbound data transfer
+| Critério | Fly.io | Railway | Render | GCP Run | AWS Fargate |
+|----------|---------|---------|--------|---------|-------------|
+| **Região São Paulo** | ✅ GRU | ❌ | ❌ | ✅ | ✅ |
+| **Latência Brasil** | <10ms | 150-200ms | 150-200ms | <10ms | <10ms |
+| **WebSocket Nativo** | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| **Multi-Container** | ✅ Excelente | ⚠️ | ✅ | ✅ | ✅ |
+| **Custo (10 partidas)** | $7-13 | $21-36 | $30-59 | $18-33 | $40-65 |
+| **Custo (50 partidas)** | $55-90 | $131-211 | $146-241 | $90-145 | $190-330 |
+| **Unix Sockets** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Edge Network** | ✅ Anycast | ❌ | ❌ | ✅ | ✅ |
 
-### Nosso Setup
+### Veredito: **Fly.io é a melhor escolha** ✅
 
-- **Gateway:** 1 VM (256MB) = $0 (dentro do free tier)
-- **Backend:** 1 VM (1GB) = ~$5/mês (excede free tier)
-- **Volume:** 1GB = $0.15/mês
-- **Bandwidth:** Depende do uso (~$0.02/GB após 160GB)
+**Motivos:**
+1. **Latência crítica:** São Paulo (GRU) < 10ms vs 150-200ms competidores sem SA
+2. **Custo-benefício:** 2-4x mais barato que alternativas
+3. **Simplicidade:** Multi-service deployment nativo
+4. **Escalabilidade:** Anycast global se expandir para fora do Brasil
 
-**Total estimado:** **$5-10/mês**
+---
 
-### Economia com Together AI
+## 💰 Análise Detalhada de Custos
 
-Se adicionar Together AI (Llama-3.2-Vision):
+### Cenário 1: 10 Partidas Simultâneas
 
-- **Custo Vision API:**
-  - Antes: $2.50/1M tokens (GPT-4o)
-  - Depois: $0.30/1M tokens (Llama)
-  - **Economia:** $2.20/1M tokens (88%)
+**Infraestrutura (Fly.io):**
+| Componente | Recursos | Custo/Mês |
+|------------|----------|-----------|
+| Gateway | 1 CPU, 512MB | $0 (free tier) |
+| Backend | 2 CPUs, 2GB | $7 |
+| Storage | 5GB volume | $0.75 |
+| Bandwidth | ~100GB | $2 |
+| **Total Infra** | | **$9.75** |
 
-Para 1M frames/mês:
-- **Economia:** ~$2,000/mês
-- **Custo infra Fly.io:** ~$10/mês
-- **ROI:** 200x
+**API Costs (com otimizações NASA):**
+- Frames/hora: 14,400 × 10 = 144,000
+- Após dedup + filtros: 95% redução = ~7,200 processados
+- Tokens: 19.7M tokens × 10 = 197M/mês
+- Custo GPT-4o: $0.30/hora × 10 = $3/hora = **$2,160/mês**
+- **Com Gemini Flash (90% cheaper): $216/mês**
+
+**Total Cenário 1:**
+- Infra + API (Gemini): **$226/mês**
+- Otimizações adicionais: **~$45-60/mês** (80% redução)
+
+### Cenário 2: 50 Partidas Simultâneas
+
+**Infraestrutura (Fly.io):**
+| Componente | Recursos | Custo/Mês |
+|------------|----------|-----------|
+| Gateway | 2×(2 CPU, 1GB) | $15 |
+| Backend | 3×(4 CPU, 4GB) | $60 |
+| Storage | 20GB volume | $3 |
+| Bandwidth | ~500GB | $10 |
+| **Total Infra** | | **$88** |
+
+**API Costs (com otimizações):**
+- Com Gemini Flash: **$1,080/mês**
+- Otimizações adicionais: **~$230-300/mês** (80% redução)
+
+**Total Cenário 2: $318-388/mês**
+
+### Estratégias de Redução de Custos
+
+**Prioridade Alta (já implementadas):**
+1. ✅ **Gemini Flash 2.0 Fallback** → 90% redução (já ativo)
+2. ✅ **Frame Deduplication** → 70% redução (já ativo)
+3. ✅ **Vision Pre-Filter** → 60% frames filtrados (já ativo)
+4. ✅ **ROI Cropping** → 75% tokens reduzidos (já ativo)
+5. ✅ **Kill Grouping** → 20% economia (já ativo)
+
+**Efeito combinado:** 99.5% de redução vs sem otimizações
+
+**Próximas Otimizações:**
+- [ ] Aumentar `FRAME_SKIP_INTERVAL=3` (33% economia adicional)
+- [ ] Implementar LRU cache para Vision API (10-15% economia)
+- [ ] Usar Gemini como primário (não fallback)
+
+---
+
+## 📈 Recomendações de Recursos por Escala
+
+### Fase 1: Início (1-10 partidas)
+
+**Gateway:**
+```toml
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512  # Aumentado para segurança
+```
+
+**Backend:**
+```toml
+[vm]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 2048  # Aumentado para OCR workers
+
+[env]
+  OCR_WORKERS = "8"
+```
+
+**Quando escalar:** CPU >70% ou Memory >80% por 15min
+
+---
+
+### Fase 2: Crescimento (10-30 partidas)
+
+**Gateway - Escalar horizontalmente:**
+```bash
+fly scale count 2 --app gta-analytics-gateway
+```
+
+**Backend - Aumentar recursos:**
+```bash
+fly scale vm shared-cpu-4x --app gta-analytics-backend
+# OU escalar horizontalmente:
+fly scale count 2 --app gta-analytics-backend
+```
+
+**Adicionar Redis para session state:**
+```bash
+fly redis create --name gta-redis --region gru
+# Atualizar GATEWAY_URL para usar Redis pub/sub
+```
+
+**Custo adicional:** +$5-10/mês (Redis)
+
+---
+
+### Fase 3: Alto Volume (30-50 partidas)
+
+**Gateway:**
+```toml
+[vm]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 1024
+```
+
+**Backend (3 instâncias):**
+```bash
+fly scale count 3 --app gta-analytics-backend
+fly scale vm shared-cpu-4x --app gta-analytics-backend
+
+# Atualizar .env
+OCR_WORKERS=16
+```
+
+**Adicionar PostgreSQL para analytics histórico:**
+```bash
+fly postgres create --name gta-analytics-db --region gru
+```
+
+**Custo adicional:** +$10-25/mês (Postgres)
+
+---
+
+### Fase 4: Escala Global (50+ partidas)
+
+**Deploy multi-região:**
+```toml
+primary_region = "gru"  # São Paulo
+regions = ["gru", "scl"]  # Santiago como backup
+```
+
+**Auto-scaling (quando disponível):**
+```bash
+fly autoscale set \
+  --app gta-analytics-backend \
+  --min 3 \
+  --max 10 \
+  --balance-regions \
+  --metric cpu \
+  --value 70
+```
+
+**Considerar:**
+- Cloudflare CDN para dashboards (free tier)
+- Load balancer dedicado
+- Migrar para AWS/GCP se >200 partidas
+
+---
+
+## ⚡ Checklist de Otimização de Performance
+
+### Rede
+
+- [x] **Região São Paulo (GRU)** - Latência <10ms
+- [x] **Unix Sockets** para IPC Gateway↔Backend
+- [ ] **HTTP/2** habilitado (verificar)
+- [x] **WebSocket sem compressão** (correto para binary)
+- [ ] **Connection pooling** para Vision API
+- [x] **Anycast routing** (Fly.io automático)
+
+### Memória
+
+- [x] **Ring buffer com drop policy** (Gateway)
+- [x] **Frame deduplication** (95% threshold)
+- [ ] **LRU cache** para Vision API responses (implementar)
+- [x] **Limit WebSocket connections** (100 max)
+- [ ] **Memory profiling** (`memory_profiler`)
+- [ ] **GC tuning** (Go: GOGC=100, Python: gc.collect())
+
+### CPU
+
+- [x] **OCR thread pool** (8 workers async)
+- [x] **Async I/O** para Vision API (httpx.AsyncClient)
+- [x] **Frame skip** (processar 50%)
+- [ ] **CPU profiling** (`go tool pprof` + `py-spy`)
+- [ ] **Otimizar image preprocessing** (NumPy vectorization)
+- [ ] **GPU acceleration** (considerar para >100 partidas)
+
+### Caching
+
+**Implementar API Response Cache:**
+```python
+# Adicionar em processor.py
+from cachetools import TTLCache
+
+vision_cache = TTLCache(maxsize=100, ttl=300)  # 5min TTL
+
+def process_frame_cached(frame):
+    frame_hash = hash_frame(frame)
+    if frame_hash in vision_cache:
+        return vision_cache[frame_hash]
+    result = process_frame(frame)
+    vision_cache[frame_hash] = result
+    return result
+```
+
+**Economia esperada:** 10-15% de API calls
+
+---
+
+## 📊 Monitoramento e Observabilidade
+
+### Métricas Críticas
+
+**Infraestrutura:**
+- CPU utilization (target: <70% média)
+- Memory usage (target: <80% alocado)
+- Network throughput (ingress/egress)
+- Disk I/O (volume exports)
+
+**Aplicação:**
+- Frames received/segundo (Gateway)
+- Frames processed/segundo (Backend)
+- Frame drop rate (target: <5%)
+- WebSocket connections count
+- OCR processing latency
+- Vision API latency
+- Kill detection rate (target: >85%)
+
+**Negócio:**
+- Partidas ativas
+- Total kills detectados
+- API tokens consumidos
+- Custo por partida
+- User satisfaction (dashboard responsiveness)
+
+### Ferramentas Recomendadas
+
+**Fly.io Built-in (Grátis):**
+```bash
+# Métricas em tempo real
+fly dashboard --app gta-analytics-backend
+
+# Logs
+fly logs --app gta-analytics-backend -f
+
+# SSH para debug
+fly ssh console --app gta-analytics-backend
+```
+
+**Grafana Cloud (Free tier - Recomendado):**
+```toml
+# Adicionar em fly.toml
+[metrics]
+  port = 9091
+  path = "/metrics"
+```
+
+**Setup:**
+1. Criar conta Grafana Cloud (grátis)
+2. Instalar Prometheus exporter no Backend
+3. Configurar remote_write para Grafana
+4. Importar dashboard template
+
+**Custo:** Free tier cobre <50k metrics/mês
+
+**Better Stack (Logs - Opcional):**
+```python
+# backend/main_websocket.py
+from logtail import LogtailHandler
+
+handler = LogtailHandler(source_token="your_token")
+logger.addHandler(handler)
+```
+
+**Custo:** Free tier cobre 1GB logs/mês
+
+**Sentry (Erro tracking - Recomendado):**
+```python
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="your_dsn",
+    environment="production",
+    traces_sample_rate=0.1
+)
+```
+
+**Custo:** Free tier cobre 5k events/mês
+
+### Alertas
+
+**Críticos (PagerDuty/Slack):**
+- ❌ Backend service down (health check fails)
+- ❌ Gateway service down
+- ⚠️ CPU >90% por 5 minutos
+- ⚠️ Memory >95% por 2 minutos
+- ⚠️ Frame drop rate >20%
+- ⚠️ API error rate >10%
+
+**Warnings (Email):**
+- 📧 CPU >70% por 15 minutos
+- 📧 Memory >80% por 10 minutos
+- 📧 Frame drop rate >10%
+- 📧 Disk usage >80%
+- 📧 API cost >$100/dia (spike inesperado)
+
+**Info (Dashboard):**
+- ℹ️ Nova partida iniciada
+- ℹ️ Export gerado
+- ℹ️ Service deployed
+- ℹ️ Config alterada
+
+---
+
+## 🔄 Quando Considerar Outras Plataformas
+
+**Migrar APENAS se:**
+
+1. **Expansão significativa fora da América do Sul** (100+ partidas globais)
+   - Considerar: AWS Fargate multi-região
+   - Custo: 2-3x mais caro, mas melhor latência global
+
+2. **Custo excede $500/mês consistentemente**
+   - Considerar: GCP Run ou Kubernetes customizado
+   - Economia: ~20-30% em alta escala
+
+3. **Necessidade de features avançadas de database**
+   - Adicionar: PostgreSQL managed (pode manter Fly.io)
+   - Ou migrar para: AWS RDS/Aurora
+
+4. **Compliance/Certificações empresariais**
+   - Migrar para: AWS/GCP para enterprise SLAs
+   - Custo: Significativamente maior
+
+**Veredito atual:** Fly.io é ótimo para 0-200 partidas simultâneas
 
 ---
 

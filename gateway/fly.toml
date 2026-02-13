@@ -59,11 +59,14 @@ primary_region = "gru"  # São Paulo, Brazil
 #   [[services.ports]]
 #     port = 50000
 
-# VM resources
+# VM resources (otimizado para produção)
+# Fase 1 (1-10 partidas): 1 CPU, 512MB RAM
+# Fase 2 (10-30 partidas): escale para 2 instâncias
+# Fase 3 (30-50 partidas): 2 CPU, 1GB RAM ou 3 instâncias
 [vm]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512  # Aumentado para segurança (recomendação de produção)
 
 # Metrics
 [metrics]
