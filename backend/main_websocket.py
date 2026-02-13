@@ -366,6 +366,12 @@ async def root():
     return {"status": "online", "service": "GTA Analytics Backend"}
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint for Fly.io"""
+    return {"status": "ok"}
+
+
 @app.get("/stats")
 async def get_stats():
     """Retorna estatisticas atuais"""
