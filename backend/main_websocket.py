@@ -316,12 +316,15 @@ class GTAAnalyticsBackend:
 # FastAPI app
 app = FastAPI(title="GTA Analytics Backend")
 
-# CORS configurado de forma mais segura
-# Em produção, substitua ["*"] pela lista de origens permitidas
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-if "*" in ALLOWED_ORIGINS:
-    logger.warning("⚠️  CORS configurado para aceitar todas as origens (*). "
-                  "Em produção, defina ALLOWED_ORIGINS no .env com domínios específicos.")
+# CORS configurado com origens específicas para segurança
+# Lista de origens permitidas (production + desenvolvimento local)
+ALLOWED_ORIGINS = [
+    "https://gta-analytics-backend.fly.dev",
+    "https://gta-analytics-gateway.fly.dev",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+logger.info(f"🔒 CORS configurado com origens específicas: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
