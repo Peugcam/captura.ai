@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA Analytics - Estrategista</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0e1015;
+            color: #ffffff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* LAYOUT PRINCIPAL */
+        .viewer-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr 400px;
+            grid-template-rows: 60px 1fr;
+            gap: 10px;
+            height: 100vh;
+            padding: 10px;
+        }
+
+        /* HEADER */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge.connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-badge.disconnected {
+            background: rgba(107, 114, 128, 0.2);
+            color: #6b7280;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .btn-export {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        /* PAINÉIS */
+        .panel {
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #991b1b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-header.blue {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            border-bottom-color: #1e40af;
+        }
+
+        .section-header.purple {
+            background: linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%);
+            border-bottom-color: #5b21b6;
+        }
+
+        .section-header.green {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            border-bottom-color: #047857;
+        }
+
+        .scrollable-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .scrollable-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scrollable-content::-webkit-scrollbar-track {
+            background: #1a1d24;
+        }
+
+        .scrollable-content::-webkit-scrollbar-thumb {
+            background: #3b4251;
+            border-radius: 3px;
+        }
+
+        /* KILL FEED ITEM */
+        .kill-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #2a2d35;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .kill-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .kill-time {
+            color: #6b7280;
+            font-size: 11px;
+        }
+
+        .kill-type-badge {
+            background: #374151;
+            color: #9ca3af;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .kill-players {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player {
+            flex: 1;
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .player-team {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .kill-icon {
+            color: #ef4444;
+            font-size: 16px;
+        }
+
+        /* RANKING ITEM */
+        .rank-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #2a2d35;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .rank-position {
+            font-size: 18px;
+            font-weight: 700;
+            color: #6b7280;
+            min-width: 30px;
+        }
+
+        .rank-item:nth-child(1) .rank-position { color: #fbbf24; }
+        .rank-item:nth-child(2) .rank-position { color: #9ca3af; }
+        .rank-item:nth-child(3) .rank-position { color: #cd7f32; }
+
+        .rank-info {
+            flex: 1;
+        }
+
+        .rank-player-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .rank-player-team {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .rank-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .rank-stat {
+            text-align: center;
+        }
+
+        .rank-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #10b981;
+        }
+
+        .rank-stat-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
+        .status-indicator.dead {
+            background: #6b7280;
+        }
+
+        /* TEAM CARD */
+        .team-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #2a2d35;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .team-card.eliminated {
+            border-left-color: #6b7280;
+            opacity: 0.5;
+        }
+
+        .team-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .team-name {
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .team-alive {
+            background: #10b981;
+            color: #ffffff;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .team-card.eliminated .team-alive {
+            background: #6b7280;
+        }
+
+        .team-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* EMPTY STATE */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            opacity: 0.3;
+            margin-bottom: 12px;
+        }
+
+        /* CENTRO - INFO */
+        .center-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-layout">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">
+                <h1>🎮 GTA Analytics - Visão do Estrategista</h1>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="status-badge connected" id="backendStatus">
+                    <span class="status-dot"></span>
+                    Conectado
+                </div>
+
+                <button class="btn-export" id="btnExport">
+                    <span>📊</span>
+                    <span>Exportar Excel</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PAINEL ESQUERDO - KILL FEED -->
+        <div class="panel">
+            <div class="section-header">
+                <span>⚔️</span>
+                <span>Kill Feed em Tempo Real</span>
+            </div>
+            <div class="scrollable-content" id="killFeedContent">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>Aguardando eventos de combate...</div>
+                    <div style="font-size: 11px; margin-top: 8px;">O jogador precisa iniciar a captura</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTRO - ESTATÍSTICAS -->
+        <div class="center-info">
+            <!-- STATS CARDS -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">⚔️</div>
+                    <div class="stat-value" id="totalKills">0</div>
+                    <div class="stat-label">Total de Kills</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="totalPlayers">0</div>
+                    <div class="stat-label">Jogadores Ativos</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-value" id="totalTeams">0</div>
+                    <div class="stat-label">Times Ativos</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-value" id="matchTime">0:00</div>
+                    <div class="stat-label">Tempo de Partida</div>
+                </div>
+            </div>
+
+            <!-- TIMES -->
+            <div class="panel" style="flex: 1;">
+                <div class="section-header green">
+                    <span>📊</span>
+                    <span>Status dos Times</span>
+                </div>
+                <div class="scrollable-content" id="teamsContent">
+                    <div class="empty-state">
+                        <div>Aguardando dados dos times...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAINEL DIREITO - RANKING -->
+        <div class="panel">
+            <div class="section-header purple">
+                <span>🏆</span>
+                <span>Top 10 Jogadores</span>
+            </div>
+            <div class="scrollable-content" id="rankingContent">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <div>Aguardando kills...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let analyticsWs = null;
+        let killCount = 0;
+        let matchStartTime = null;
+        let matchTimeInterval = null;
+
+        // WebSocket URL
+        const getWebSocketUrl = (path) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            if (host === 'localhost' || host === '127.0.0.1') {
+                return `${protocol}//${host}:3000${path}`;
+            }
+            return `${protocol}//${host}${path}`;
+        };
+
+        const ANALYTICS_WS = getWebSocketUrl('/events');
+
+        // Conectar ao Backend Analytics
+        function connectAnalyticsWebSocket() {
+            try {
+                analyticsWs = new WebSocket(ANALYTICS_WS);
+
+                analyticsWs.onopen = () => {
+                    document.getElementById('backendStatus').className = 'status-badge connected';
+                    document.getElementById('backendStatus').innerHTML = '<span class="status-dot"></span>Conectado';
+                    console.log('✅ Conectado ao backend');
+
+                    // Iniciar contador de tempo
+                    if (!matchStartTime) {
+                        matchStartTime = Date.now();
+                    }
+                    if (!matchTimeInterval) {
+                        matchTimeInterval = setInterval(updateMatchTime, 1000);
+                    }
+                };
+
+                analyticsWs.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+
+                    if (message.type === 'kill') {
+                        addKillToFeed(message.data);
+                        killCount++;
+                        document.getElementById('totalKills').textContent = killCount;
+                    }
+
+                    if (message.type === 'stats') {
+                        updateStats(message.data);
+                    }
+                };
+
+                analyticsWs.onerror = () => {
+                    document.getElementById('backendStatus').className = 'status-badge disconnected';
+                    document.getElementById('backendStatus').innerHTML = '<span class="status-dot"></span>Desconectado';
+                };
+
+                analyticsWs.onclose = () => {
+                    document.getElementById('backendStatus').className = 'status-badge disconnected';
+                    document.getElementById('backendStatus').innerHTML = '<span class="status-dot"></span>Reconectando...';
+                    setTimeout(connectAnalyticsWebSocket, 3000);
+                };
+
+            } catch (error) {
+                console.error('❌ Erro ao conectar:', error);
+            }
+        }
+
+        function updateMatchTime() {
+            if (!matchStartTime) return;
+
+            const elapsed = Math.floor((Date.now() - matchStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('matchTime').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function addKillToFeed(kill) {
+            const killFeed = document.getElementById('killFeedContent');
+
+            // Remover empty state
+            if (killFeed.querySelector('.empty-state')) {
+                killFeed.innerHTML = '';
+            }
+
+            const killItem = document.createElement('div');
+            killItem.className = 'kill-item';
+
+            const now = new Date();
+            const time = now.toLocaleTimeString();
+            const killType = kill.kill_type || 'unknown';
+
+            killItem.innerHTML = `
+                <div class="kill-item-header">
+                    <span class="kill-time">${time}</span>
+                    <span class="kill-type-badge ${killType}">${killType}</span>
+                </div>
+                <div class="kill-players">
+                    <div class="player">
+                        <div class="player-name">${kill.killer}</div>
+                        <div class="player-team">${kill.killer_team}</div>
+                    </div>
+                    <span class="kill-icon">💀</span>
+                    <div class="player">
+                        <div class="player-name">${kill.victim}</div>
+                        <div class="player-team">${kill.victim_team}</div>
+                    </div>
+                </div>
+                ${kill.distance ? `<div style="text-align: center; margin-top: 6px; font-size: 11px; color: #9ca3af;">${kill.distance}</div>` : ''}
+            `;
+
+            killFeed.insertBefore(killItem, killFeed.firstChild);
+
+            // Manter apenas últimos 50 itens
+            while (killFeed.children.length > 50) {
+                killFeed.removeChild(killFeed.lastChild);
+            }
+        }
+
+        function updateStats(stats) {
+            // Atualizar Stats Gerais
+            if (stats.teams) {
+                const activeTeams = stats.teams.filter(t => t.alive > 0).length;
+                document.getElementById('totalTeams').textContent = activeTeams;
+            }
+
+            if (stats.leaderboard) {
+                const activePlayers = stats.leaderboard.filter(p => p.alive).length;
+                document.getElementById('totalPlayers').textContent = activePlayers;
+            }
+
+            // Atualizar Times
+            const teamsContent = document.getElementById('teamsContent');
+            if (stats.teams && stats.teams.length > 0) {
+                teamsContent.innerHTML = '';
+
+                // Ordenar: times com jogadores vivos primeiro
+                const sortedTeams = [...stats.teams].sort((a, b) => b.alive - a.alive);
+
+                sortedTeams.forEach(team => {
+                    const teamCard = document.createElement('div');
+                    teamCard.className = `team-card ${team.alive === 0 ? 'eliminated' : ''}`;
+                    teamCard.innerHTML = `
+                        <div class="team-header">
+                            <div class="team-name">${team.name}</div>
+                            <div class="team-alive">${team.alive} vivos</div>
+                        </div>
+                        <div class="team-stats">
+                            <span>Total: ${team.total}</span>
+                            <span>Kills: ${team.kills}</span>
+                            <span>Deaths: ${team.deaths || 0}</span>
+                        </div>
+                    `;
+                    teamsContent.appendChild(teamCard);
+                });
+            }
+
+            // Atualizar Ranking
+            const rankingContent = document.getElementById('rankingContent');
+            if (stats.leaderboard && stats.leaderboard.length > 0) {
+                rankingContent.innerHTML = '';
+                stats.leaderboard.slice(0, 10).forEach((player, idx) => {
+                    const rankItem = document.createElement('div');
+                    rankItem.className = 'rank-item';
+                    rankItem.innerHTML = `
+                        <div class="rank-position">#${idx + 1}</div>
+                        <div class="status-indicator ${player.alive ? '' : 'dead'}"></div>
+                        <div class="rank-info">
+                            <div class="rank-player-name">${player.name}</div>
+                            <div class="rank-player-team">${player.team}</div>
+                        </div>
+                        <div class="rank-stats">
+                            <div class="rank-stat">
+                                <div class="rank-stat-value">${player.kills}</div>
+                                <div class="rank-stat-label">Kills</div>
+                            </div>
+                            <div class="rank-stat">
+                                <div class="rank-stat-value" style="color: #ef4444;">${player.deaths}</div>
+                                <div class="rank-stat-label">Deaths</div>
+                            </div>
+                        </div>
+                    `;
+                    rankingContent.appendChild(rankItem);
+                });
+            }
+        }
+
+        // Exportar Excel
+        async function exportToExcel() {
+            try {
+                const baseUrl = window.location.protocol === 'https:' ?
+                    window.location.origin :
+                    'http://localhost:3000';
+
+                const response = await fetch(`${baseUrl}/export`);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gta_analytics_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                console.log('✅ Planilha exportada!');
+            } catch (error) {
+                console.error('❌ Erro ao exportar:', error);
+                alert('Erro ao exportar planilha. Verifique se o backend está rodando.');
+            }
+        }
+
+        // Inicializar
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('📊 Dashboard do Estrategista carregado!');
+            connectAnalyticsWebSocket();
+
+            document.getElementById('btnExport').addEventListener('click', exportToExcel);
+        });
+    </script>
+</body>
+</html>

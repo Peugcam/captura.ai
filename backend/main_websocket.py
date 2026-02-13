@@ -383,7 +383,7 @@ async def get_stats():
 @app.get("/player")
 async def serve_player_dashboard():
     """Serve dashboard minimalista para o jogador"""
-    dashboard_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard-player.html")
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-player.html")
     if not os.path.exists(dashboard_path):
         raise HTTPException(status_code=404, detail="Dashboard do jogador não encontrado")
     return FileResponse(dashboard_path, media_type="text/html")
@@ -392,7 +392,7 @@ async def serve_player_dashboard():
 @app.get("/viewer")
 async def serve_viewer_dashboard():
     """Serve dashboard completo para o estrategista"""
-    dashboard_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard-viewer.html")
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-viewer.html")
     if not os.path.exists(dashboard_path):
         raise HTTPException(status_code=404, detail="Dashboard do estrategista não encontrado")
     return FileResponse(dashboard_path, media_type="text/html")
