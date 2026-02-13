@@ -21,7 +21,7 @@ COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags='-w -s -extldflags "-static"' \
     -o gateway \
-    main.go websocket.go buffer.go
+    .
 
 # ========================================
 # Stage 2: Runtime

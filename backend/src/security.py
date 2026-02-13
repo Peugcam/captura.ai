@@ -291,3 +291,78 @@ class RateLimiter:
 
 # Singleton global para rate limiting
 global_rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+
+
+# ============================================================================
+# API Authentication
+# ============================================================================
+
+import secrets
+import hashlib
+from fastapi import HTTPException, Security, status
+from fastapi.security import APIKeyHeader
+from typing import Optional
+
+# API Key Header
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+# Load API token from environment (for internal services like gateway)
+# In production, this should be a strong random token
+INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN", "")
+
+if not INTERNAL_API_TOKEN:
+    # Generate a secure token if not provided (development only)
+    INTERNAL_API_TOKEN = secrets.token_urlsafe(32)
+    logger.warning(f"⚠️  No INTERNAL_API_TOKEN set. Generated temporary token: {INTERNAL_API_TOKEN[:16]}...")
+    logger.warning("   Set INTERNAL_API_TOKEN in .env for production!")
+
+# Hash the token for comparison (prevents timing attacks)
+TOKEN_HASH = hashlib.sha256(INTERNAL_API_TOKEN.encode()).hexdigest()
+
+
+def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> str:
+    """
+    Verify API key from request header
+
+    Args:
+        api_key: API key from X-API-Key header
+
+    Returns:
+        API key if valid
+
+    Raises:
+        HTTPException: If API key is missing or invalid
+    """
+    if api_key is None:
+        logger.warning("🔒 API request rejected: Missing API key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API key. Include X-API-Key header.",
+            headers={"WWW-Authenticate": "ApiKey"}
+        )
+
+    # Constant-time comparison to prevent timing attacks
+    provided_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+    if not secrets.compare_digest(provided_hash, TOKEN_HASH):
+        logger.warning(f"🔒 API request rejected: Invalid API key {api_key[:8]}...")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key"
+        )
+
+    return api_key
+
+
+# Public endpoints (no authentication required)
+PUBLIC_ENDPOINTS = [
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json"
+]
+
+
+def is_public_endpoint(path: str) -> bool:
+    """Check if endpoint is public (no auth required)"""
+    return any(path.startswith(endpoint) for endpoint in PUBLIC_ENDPOINTS)

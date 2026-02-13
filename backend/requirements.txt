@@ -3,27 +3,15 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 httpx==0.26.0
 
-# Image Processing
-opencv-python>=4.9.0
+# Image Processing (for Vision Pre-Filter)
 Pillow>=11.0.0
-numpy>=1.26.0
 
-# OCR
-pytesseract==0.3.10
-easyocr==1.7.0  # Better OCR with deep learning (60% accuracy vs Tesseract's 45%)
-
-# AI/ML
+# AI/ML (Vision API)
 openai==1.12.0
 requests==2.31.0
-litellm>=1.30.0
-
-# WebRTC
-aiortc>=1.6.0
-aiohttp>=3.9.0
 
 # Data Export
 xlsxwriter==3.1.9
-reportlab==4.0.9
 
 # Utils
 python-dotenv==1.0.0

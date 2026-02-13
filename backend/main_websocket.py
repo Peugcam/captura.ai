@@ -21,12 +21,13 @@ import json
 import os
 from typing import List, Dict, Set
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 import uvicorn
 import config
 from processor import FrameProcessor
+from src.security import verify_api_key, global_rate_limiter
 
 # Setup logging
 logging.basicConfig(
@@ -392,12 +393,15 @@ async def serve_viewer_dashboard():
 
 
 @app.post("/export")
-async def export_to_excel(format: str = "luis"):
+async def export_to_excel(format: str = "luis", api_key: str = Depends(verify_api_key)):
     """
     Exporta dados atuais para Excel
 
+    PROTECTED ENDPOINT - Requires X-API-Key header
+
     Args:
         format: "luis" (padrão), "standard" ou "advanced"
+        api_key: API key from header (injected by dependency)
 
     Returns:
         Caminho do arquivo gerado
@@ -477,8 +481,17 @@ async def reset_stats():
 @app.websocket("/capture")
 async def capture_endpoint(websocket: WebSocket):
     """WebSocket endpoint para RECEBER frames do browser (modo híbrido com Gateway)"""
+
+    # Rate limiting check (usando IP do cliente)
+    client_id = f"{websocket.client.host}:{websocket.client.port}"
+
+    if not global_rate_limiter.is_allowed(client_id):
+        await websocket.close(code=1008, reason="Rate limit exceeded")
+        logger.warning(f"🔒 Rate limit exceeded for {client_id}")
+        return
+
     await websocket.accept()
-    logger.info("📹 Browser connected for frame capture")
+    logger.info(f"📹 Browser connected for frame capture from {client_id}")
 
     frame_count = 0
 

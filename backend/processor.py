@@ -16,18 +16,8 @@ import io
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
-import cv2
-import numpy as np
 from PIL import Image
-import pytesseract
 import os
-
-# Configure Tesseract path for Windows
-if os.name == 'nt':  # Windows
-    tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    if os.path.exists(tesseract_path):
-        pytesseract.pytesseract.tesseract_cmd = tesseract_path
-        os.environ['TESSDATA_PREFIX'] = r'C:\Program Files\Tesseract-OCR\tessdata'
 
 # Import local modules
 from src.brazilian_kill_parser import BrazilianKillParser
@@ -139,105 +129,11 @@ Answer ONLY with: YES or NO"""
             return True  # Em caso de erro, deixa passar
 
 
-class OCRPreFilter:
-    """OCR pré-filtro para detectar frames com kills (LEGACY - não usado mais)"""
-
-    def __init__(self, keywords: List[str]):
-        self.keywords = keywords
-        self.executor = ThreadPoolExecutor(max_workers=config.OCR_WORKERS)
-
-    def extract_roi(self, frame, game_type: str):
-        """
-        Extrai região de interesse (ROI) baseada no tipo de jogo
-
-        Args:
-            frame: Frame OpenCV (numpy array)
-            game_type: Tipo do jogo ('gta' ou 'naruto')
-
-        Returns:
-            ROI extraído ou frame inteiro se USE_ROI=false
-        """
-        if not config.USE_ROI:
-            return frame
-
-        height, width = frame.shape[:2]
-
-        if game_type == "gta":
-            # Kill feed GTA: canto superior direito (OTIMIZADO - Gemini Refined)
-            # ROI menor = OCR mais rápido + menos falsos positivos
-            # Utiliza apenas 25% da largura e 25% da altura no canto superior direito
-            x1 = int(width * 0.75)   # 75% da largura (mais focado)
-            y1 = int(height * 0.05)  # 5% do topo (pula barra de título/bordas)
-            x2 = width               # Até o final
-            y2 = int(height * 0.30)  # 30% do topo (aumentado levemente para segurança)
-
-        else:  # naruto ou outros
-            # Para Naruto Online: tela inteira (combate acontece em toda tela)
-            x1, y1 = 0, 0
-            x2, y2 = width, height
-
-        # Ensure valid coordinates
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(width, x2)
-        y2 = min(height, y2)
-
-        return frame[y1:y2, x1:x2]
-
-    def has_kill_keywords(self, image_base64: str) -> bool:
-        """
-        Verifica se frame tem keywords de kill via OCR
-
-        Args:
-            image_base64: Frame em base64
-
-        Returns:
-            True se detectou keywords
-        """
-        try:
-            # Decode base64
-            image_data = base64.b64decode(image_base64)
-            image = Image.open(io.BytesIO(image_data))
-
-            # Convert para OpenCV
-            frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
-            # Extrair ROI baseado no tipo de jogo
-            roi = self.extract_roi(frame, config.GAME_TYPE)
-
-            # OCR na ROI (mais rápido e preciso que tela inteira)
-            text = pytesseract.image_to_string(
-                roi,
-                lang='eng+por',  # Inglês + Português para suporte bilíngue
-                config='--psm 6'
-            )
-
-            # Check SOMENTE keywords (mais preciso, menos falsos positivos)
-            text_upper = text.upper()
-            # Keywords já estão em UPPERCASE no config.py
-            has_keyword = any(kw in text_upper for kw in self.keywords)
-
-            # Log para debug (mostra texto detectado)
-            if has_keyword:
-                matching_keywords = [kw for kw in self.keywords if kw in text_upper]
-                logger.info(f"✅ OCR detected keywords: {matching_keywords}")
-                logger.debug(f"   OCR text preview: {text_upper[:100]}...")
-            else:
-                logger.debug(f"❌ OCR no keywords found. Text preview: {text_upper[:50]}...")
-
-            # OTIMIZAÇÃO: Detecção de números desabilitada para evitar falsos positivos
-            # (FPS counter, munição, dinheiro, etc não são kills)
-            # Keywords são suficientes para detectar 95%+ das kills no GTA
-
-            return has_keyword  # Retorna TRUE somente se tem keyword real de kill
-
-        except Exception as e:
-            logger.error(f"OCR error: {e}")
-            return True  # Em caso de erro, deixa passar (safe default)
-
-    def process_async(self, image_base64: str):
-        """Process frame async"""
-        return self.executor.submit(self.has_kill_keywords, image_base64)
+# ==============================================================================
+# NOTE: OCRPreFilter class was removed (LEGACY CODE)
+# Tesseract OCR has been replaced with VisionPreFilter (low-res Vision API calls)
+# for better accuracy and simpler deployment (no Tesseract dependencies)
+# ==============================================================================
 
 
 class VisionProcessor:

@@ -25,10 +25,6 @@ FROM python:3.11-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    tesseract-ocr-por \
-    libtesseract-dev \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
