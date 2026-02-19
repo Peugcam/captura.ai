@@ -19,15 +19,19 @@ import logging
 import time
 import json
 import os
+import base64
 from typing import List, Dict, Set
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
 import uvicorn
 import config
 from processor import FrameProcessor
 from src.security import verify_api_key, global_rate_limiter
+from roster_manager import RosterManager
+from src.multi_api_client import MultiAPIClient
 
 # Setup logging
 logging.basicConfig(
@@ -35,6 +39,26 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# Pydantic models for request validation
+class ManualTeamInput(BaseModel):
+    """Model for manual team input"""
+    tag: str
+    full_name: str = ""
+    players: List[str] = []
+
+
+class ManualRosterInput(BaseModel):
+    """Model for manual roster input"""
+    teams: List[ManualTeamInput]
+
+
+class PlayerStatusUpdate(BaseModel):
+    """Model for updating player status manually"""
+    team_tag: str
+    player_name: str
+    alive: bool
 
 
 class ConnectionManager:
@@ -125,9 +149,9 @@ class FramePoller:
 class GTAAnalyticsBackend:
     """Main backend application with WebSocket support"""
 
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(self, connection_manager: ConnectionManager, roster_manager=None):
         self.poller = FramePoller(config.GATEWAY_URL)
-        self.processor = FrameProcessor()
+        self.processor = FrameProcessor(roster_manager, connection_manager)
         self.frame_buffer = []
         self.last_batch_time = time.time()
         self.last_kill_detection_time = None  # Timestamp da última kill detectada
@@ -203,6 +227,23 @@ class GTAAnalyticsBackend:
         except Exception as e:
             logger.error(f"Erro ao enviar estatísticas: {e}")
 
+    async def broadcast_server_detected(self, server_type: str, confidence: float):
+        """Envia notificação de servidor GTA detectado via WebSocket"""
+        try:
+            event = {
+                'type': 'server_detected',
+                'data': {
+                    'server_type': server_type,
+                    'confidence': confidence,
+                    'timestamp': time.time()
+                }
+            }
+            await self.connection_manager.broadcast(event)
+            logger.info(f"🎮 Broadcasting server detection: {server_type} (confidence: {confidence:.2f})")
+
+        except Exception as e:
+            logger.error(f"Erro ao enviar detecção de servidor: {e}")
+
     async def check_batch_processing(self):
         """
         Verifica se deve processar batch com BUFFER ADAPTATIVO INTELIGENTE
@@ -259,6 +300,16 @@ class GTAAnalyticsBackend:
 
         # Processar com Vision AI
         kills = self.processor.process_batch(batch)
+
+        # Check if server was detected (for GTA only)
+        if hasattr(self.processor, 'vision_processor') and hasattr(self.processor.vision_processor, 'detected_server'):
+            vision_proc = self.processor.vision_processor
+            if vision_proc.detected_server and vision_proc.server_detection_confidence > 0:
+                # Broadcast server detection (only once or when it changes)
+                await self.broadcast_server_detected(
+                    vision_proc.detected_server,
+                    vision_proc.server_detection_confidence
+                )
 
         # Enviar eventos via WebSocket
         if kills:
@@ -322,7 +373,10 @@ ALLOWED_ORIGINS = [
     "https://gta-analytics-backend.fly.dev",
     "https://gta-analytics-gateway.fly.dev",
     "http://localhost:3000",
-    "http://127.0.0.1:3000"
+    "http://127.0.0.1:3000",
+    "http://localhost",
+    "http://127.0.0.1",
+    "null"  # Permite file:// protocol para testes locais
 ]
 logger.info(f"🔒 CORS configurado com origens específicas: {ALLOWED_ORIGINS}")
 
@@ -341,12 +395,20 @@ manager = ConnectionManager()
 # Backend global
 backend = None
 
+# Roster manager global (initialized on startup)
+roster_manager = None
+
 
 @app.on_event("startup")
 async def startup_event():
     """Inicializa backend ao iniciar FastAPI"""
-    global backend
-    backend = GTAAnalyticsBackend(manager)
+    global backend, roster_manager
+
+    # Initialize roster manager FIRST
+    roster_manager = RosterManager(MultiAPIClient(config.API_KEYS))
+
+    # Initialize backend WITH roster_manager
+    backend = GTAAnalyticsBackend(manager, roster_manager)
 
     logger.info("="*60)
     logger.info("🚀 Starting GTA Analytics Backend V2 - WebSocket Edition")
@@ -356,6 +418,7 @@ async def startup_event():
     logger.info(f"🤖 Vision Model: {config.VISION_MODEL}")
     logger.info(f"💾 Export Dir: {config.EXPORT_DIR}")
     logger.info(f"🎮 Game Type: {config.GAME_TYPE}")
+    logger.info(f"🏆 Tournament Mode: Ready")
     logger.info("="*60)
 
     # Start background tasks
@@ -474,8 +537,8 @@ async def reset_stats():
         return {"error": "Backend not initialized"}
 
     try:
-        # Recriar processor (limpa todos os dados)
-        backend.processor = FrameProcessor()
+        # Recriar processor (limpa todos os dados) WITH roster_manager AND connection_manager
+        backend.processor = FrameProcessor(roster_manager, manager)
         backend.frame_buffer = []
 
         logger.info("🔄 Backend stats reset!")
@@ -485,6 +548,402 @@ async def reset_stats():
     except Exception as e:
         logger.error(f"Erro ao resetar: {e}")
         return {"error": str(e)}
+
+
+# ============================================================================
+# TOURNAMENT ROSTER ENDPOINTS
+# ============================================================================
+
+@app.post("/api/tournament/roster/upload")
+async def upload_roster_image(file: UploadFile = File(...)):
+    """
+    Upload tournament bracket image and extract team roster automatically using AI
+    Falls back to manual input if extraction fails
+
+    Returns:
+        - Extracted roster data with teams and players
+        - Confidence score for extraction quality
+    """
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    try:
+        # Read image file
+        image_data = await file.read()
+
+        # Validate file size (max 10MB)
+        if len(image_data) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image too large (max 10MB)")
+
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Invalid file type. Must be an image.")
+
+        # Convert to base64
+        base64_image = base64.b64encode(image_data).decode('utf-8')
+
+        logger.info(f"📸 Processing tournament roster image: {file.filename} ({len(image_data)} bytes)")
+
+        # Extract roster using Vision API
+        roster_data = await roster_manager.load_from_image(base64_image)
+
+        teams_count = len(roster_data.get('teams', []))
+
+        if teams_count == 0:
+            logger.warning("⚠️  No teams extracted from image - AI extraction failed")
+            return {
+                "success": False,
+                "message": "No teams could be extracted from the image. Please use manual input.",
+                "data": roster_data,
+                "teams_count": 0,
+                "requires_manual_input": True
+            }
+
+        # Initialize tournament with extracted roster
+        success = roster_manager.initialize_tournament_roster(roster_data)
+
+        if success:
+            # Broadcast roster loaded event to connected clients
+            await manager.broadcast({
+                "type": "roster_loaded",
+                "data": {
+                    "tournament_name": roster_data.get('tournament_name'),
+                    "teams_count": teams_count,
+                    "teams": roster_manager.get_all_teams()
+                }
+            })
+
+            logger.info(f"✅ Tournament roster initialized with {teams_count} teams")
+
+            return {
+                "success": True,
+                "message": f"Successfully extracted {teams_count} teams from image",
+                "data": roster_data,
+                "teams_count": teams_count,
+                "teams": roster_manager.get_all_teams(),
+                "requires_manual_input": False
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to initialize tournament roster")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error processing roster image: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+
+
+@app.post("/api/tournament/roster/manual")
+async def manual_roster_input(roster_input: ManualRosterInput):
+    """
+    Manually input tournament roster (fallback when AI extraction fails)
+
+    Body:
+        {
+            "teams": [
+                {"tag": "PPP", "full_name": "Team Name", "players": ["player1", "player2", ...]},
+                ...
+            ]
+        }
+    """
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    try:
+        # Convert Pydantic models to dicts
+        teams_data = [team.dict() for team in roster_input.teams]
+
+        # Validate and load roster
+        roster_data = roster_manager.load_from_manual_input(teams_data)
+
+        teams_count = len(roster_data.get('teams', []))
+
+        if teams_count == 0:
+            raise HTTPException(status_code=400, detail="No valid teams provided")
+
+        # Initialize tournament
+        success = roster_manager.initialize_tournament_roster(roster_data)
+
+        if success:
+            # Broadcast roster loaded event
+            await manager.broadcast({
+                "type": "roster_loaded",
+                "data": {
+                    "tournament_name": "Manual Input",
+                    "teams_count": teams_count,
+                    "teams": roster_manager.get_all_teams()
+                }
+            })
+
+            logger.info(f"✅ Tournament roster initialized manually with {teams_count} teams")
+
+            return {
+                "success": True,
+                "message": f"Tournament initialized with {teams_count} teams",
+                "teams_count": teams_count,
+                "teams": roster_manager.get_all_teams()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to initialize tournament roster")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error in manual roster input: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.get("/api/tournament/roster")
+async def get_current_roster():
+    """Get current tournament roster and team status"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    return {
+        "tournament_mode": roster_manager.tournament_mode,
+        "teams_count": len(roster_manager.teams),
+        "teams": roster_manager.get_all_teams()
+    }
+
+
+@app.post("/api/tournament/team/add")
+async def add_team_to_roster(team: ManualTeamInput):
+    """Add a single team to tournament roster (for corrections)"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    success = roster_manager.add_team(
+        tag=team.tag,
+        full_name=team.full_name,
+        players=team.players
+    )
+
+    if success:
+        # Broadcast update
+        await manager.broadcast({
+            "type": "team_added",
+            "data": {
+                "team": team.dict(),
+                "teams": roster_manager.get_all_teams()
+            }
+        })
+
+        return {"success": True, "message": f"Team {team.tag} added successfully"}
+    else:
+        raise HTTPException(status_code=400, detail=f"Failed to add team {team.tag} (may already exist)")
+
+
+@app.put("/api/tournament/team/{team_tag}")
+async def update_team(team_tag: str, team: ManualTeamInput):
+    """Update team information (for manual corrections)"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    success = roster_manager.update_team(
+        tag=team_tag,
+        full_name=team.full_name,
+        players=team.players
+    )
+
+    if success:
+        # Broadcast update
+        await manager.broadcast({
+            "type": "team_updated",
+            "data": {
+                "team_tag": team_tag,
+                "teams": roster_manager.get_all_teams()
+            }
+        })
+
+        return {"success": True, "message": f"Team {team_tag} updated successfully"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Team {team_tag} not found")
+
+
+@app.delete("/api/tournament/team/{team_tag}")
+async def remove_team(team_tag: str):
+    """Remove team from tournament (for manual corrections)"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    success = roster_manager.remove_team(team_tag)
+
+    if success:
+        # Broadcast update
+        await manager.broadcast({
+            "type": "team_removed",
+            "data": {
+                "team_tag": team_tag,
+                "teams": roster_manager.get_all_teams()
+            }
+        })
+
+        return {"success": True, "message": f"Team {team_tag} removed successfully"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Team {team_tag} not found")
+
+
+@app.post("/api/tournament/player/status")
+async def update_player_status(status: PlayerStatusUpdate):
+    """
+    Manually update player alive/dead status (for manual corrections during match)
+
+    Body:
+        {
+            "team_tag": "PPP",
+            "player_name": "almeida99",
+            "alive": false
+        }
+    """
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    team = roster_manager.get_team(status.team_tag)
+    if not team:
+        raise HTTPException(status_code=404, detail=f"Team {status.team_tag} not found")
+
+    if status.player_name not in team.players:
+        raise HTTPException(status_code=404, detail=f"Player {status.player_name} not found in team {status.team_tag}")
+
+    # Update player status
+    team.players[status.player_name].alive = status.alive
+
+    # Broadcast update
+    await manager.broadcast({
+        "type": "player_status_updated",
+        "data": {
+            "team_tag": status.team_tag,
+            "player_name": status.player_name,
+            "alive": status.alive,
+            "alive_count": team.alive_count,
+            "teams": roster_manager.get_all_teams()
+        }
+    })
+
+    action = "revived" if status.alive else "marked as dead"
+    logger.info(f"✏️  Manual correction: {status.player_name} ({status.team_tag}) {action}")
+
+    return {
+        "success": True,
+        "message": f"Player {status.player_name} {action}",
+        "alive_count": team.alive_count
+    }
+
+
+@app.post("/api/tournament/match/reset")
+async def reset_match():
+    """Reset match (all players alive, stats cleared) but keep roster"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    roster_manager.reset_match()
+
+    # Broadcast reset event
+    await manager.broadcast({
+        "type": "match_reset",
+        "data": {
+            "teams": roster_manager.get_all_teams()
+        }
+    })
+
+    logger.info("🔄 Match reset - all players alive")
+
+    return {
+        "success": True,
+        "message": "Match reset successfully",
+        "teams": roster_manager.get_all_teams()
+    }
+
+
+@app.post("/api/tournament/roster/clear")
+async def clear_tournament_roster():
+    """Clear tournament roster completely (exit tournament mode)"""
+    if not roster_manager:
+        raise HTTPException(status_code=503, detail="Roster manager not initialized")
+
+    roster_manager.clear_roster()
+
+    # Broadcast clear event
+    await manager.broadcast({
+        "type": "roster_cleared",
+        "data": {}
+    })
+
+    logger.info("🗑️  Tournament roster cleared")
+
+    return {"success": True, "message": "Tournament roster cleared"}
+
+
+@app.get("/api/tournament/history/teams")
+async def get_team_history():
+    """Get all known team tags from history"""
+    from team_history import get_history_manager
+
+    history = get_history_manager()
+    teams = history.get_all_team_tags()
+
+    return {"teams": teams, "count": len(teams)}
+
+
+@app.get("/api/tournament/history/team/{team_tag}")
+async def get_team_stats(team_tag: str):
+    """Get historical stats for a specific team"""
+    from team_history import get_history_manager
+
+    history = get_history_manager()
+    stats = history.get_team_stats(team_tag)
+
+    if not stats:
+        raise HTTPException(status_code=404, detail=f"No history found for team {team_tag}")
+
+    return stats
+
+
+@app.get("/api/tournament/history/players/{team_tag}")
+async def get_known_players(team_tag: str, limit: int = 5):
+    """Get known players for a team"""
+    from team_history import get_history_manager
+
+    history = get_history_manager()
+    players = history.get_known_players(team_tag, limit)
+
+    return {"team_tag": team_tag, "players": players, "count": len(players)}
+
+
+@app.get("/api/tournament/live/stats")
+async def get_live_tournament_stats():
+    """Get live tournament statistics with historical comparison"""
+    from tournament_tracker import get_tracker
+
+    tracker = get_tracker()
+    data = tracker.get_live_dashboard_data()
+
+    return data
+
+
+@app.post("/api/tournament/finish")
+async def finish_tournament(winner_tag: str = None):
+    """Finish tournament and save to history"""
+    from tournament_tracker import get_tracker
+
+    tracker = get_tracker()
+    tracker.finish_tournament(winner_tag)
+
+    return {"success": True, "message": "Tournament finished and saved to history"}
+
+
+@app.get("/api/tournament")
+async def serve_tournament_dashboard():
+    """Serve tournament dashboard"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-tournament.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Tournament dashboard not found")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+# ============================================================================
+# END TOURNAMENT ENDPOINTS
+# ============================================================================
 
 
 @app.websocket("/capture")
