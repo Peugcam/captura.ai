@@ -55,7 +55,7 @@ func uploadHandler(wsHandler *WebSocketHandler) http.HandlerFunc {
 		base64Data := b64.StdEncoding.EncodeToString(fileBytes)
 
 		// Add to buffer
-		frame := &Frame{
+		frame := Frame{
 			Data:       []byte(base64Data),
 			Timestamp:  time.Now().UnixMilli(),
 			ReceivedAt: time.Now(),
@@ -124,7 +124,7 @@ func uploadHandlerWebRTC(webrtcHandler *WebRTCHandler) http.HandlerFunc {
 		base64Data := b64.StdEncoding.EncodeToString(fileBytes)
 
 		// Add to buffer
-		frame := &Frame{
+		frame := Frame{
 			Data:       []byte(base64Data),
 			Timestamp:  time.Now().UnixMilli(),
 			ReceivedAt: time.Now(),
