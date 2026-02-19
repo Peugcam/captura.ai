@@ -999,6 +999,49 @@ async def serve_tournament_dashboard():
 
 
 # ============================================================================
+# FRAME UPLOAD ENDPOINT (Direct upload from OBS/Browser)
+# ============================================================================
+
+@app.post("/api/frames/upload")
+async def upload_frame(file: UploadFile = File(...)):
+    """
+    Upload frame directly from OBS Browser Source
+
+    This endpoint allows OBS to send screenshots directly to the cloud backend
+    without needing a local gateway.
+
+    Returns:
+        JSON with status
+    """
+    if not backend:
+        raise HTTPException(status_code=503, detail="Backend not initialized")
+
+    try:
+        # Read image data
+        image_data = await file.read()
+
+        # Convert to base64
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+
+        # Add to processor queue (simulating gateway frame)
+        frame_data = {
+            "timestamp": int(time.time() * 1000),
+            "data": image_base64
+        }
+
+        # Process frame directly
+        await backend.processor.process_frames([frame_data])
+
+        logger.info(f"📸 Frame uploaded directly from client ({len(image_data)} bytes)")
+
+        return {"success": True, "message": "Frame uploaded successfully"}
+
+    except Exception as e:
+        logger.error(f"❌ Error processing uploaded frame: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # END TOURNAMENT ENDPOINTS
 # ============================================================================
 

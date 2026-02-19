@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GTA Analytics - Cloud Capture</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        #status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+        }
+        .connected { color: #0f0; }
+        .disconnected { color: #f00; }
+        .uploading { color: #ff0; }
+    </style>
+</head>
+<body>
+    <div id="status">
+        <div>Status: <span id="connection-status" class="disconnected">⚫ Aguardando</span></div>
+        <div>Frames: <span id="frame-count">0</span></div>
+        <div>Uploads: <span id="upload-count">0</span></div>
+        <div>Erros: <span id="error-count">0</span></div>
+    </div>
+
+    <div style="margin-top: 100px;">
+        <h2>🎮 GTA Analytics - Cloud Capture</h2>
+        <p>Sistema de captura em nuvem ativo</p>
+        <p>Pronto para receber screenshots do OBS</p>
+    </div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <script>
+        const CLOUD_URL = 'https://gta-analytics-v2.fly.dev';
+        const CAPTURE_INTERVAL = 1000; // 1 segundo
+
+        let frameCount = 0;
+        let uploadCount = 0;
+        let errorCount = 0;
+        let isUploading = false;
+
+        const statusEl = document.getElementById('connection-status');
+        const frameCountEl = document.getElementById('frame-count');
+        const uploadCountEl = document.getElementById('upload-count');
+        const errorCountEl = document.getElementById('error-count');
+
+        // Capturar screenshot e enviar para nuvem
+        async function captureAndUpload() {
+            if (isUploading) {
+                console.log('⏭️ Upload anterior ainda em andamento, pulando...');
+                return;
+            }
+
+            try {
+                isUploading = true;
+                statusEl.textContent = '🟡 Capturando';
+                statusEl.className = 'uploading';
+
+                // Capturar screenshot via OBS Browser Source
+                const video = document.createElement('video');
+                video.srcObject = await navigator.mediaDevices.getDisplayMedia({
+                    video: { mediaSource: 'screen' }
+                });
+
+                await video.play();
+
+                const canvas = document.getElementById('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+
+                // Parar captura
+                video.srcObject.getTracks().forEach(track => track.stop());
+
+                // Converter para blob
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+
+                frameCount++;
+                frameCountEl.textContent = frameCount;
+
+                // Enviar para nuvem
+                statusEl.textContent = '🟡 Enviando';
+
+                const formData = new FormData();
+                formData.append('file', blob, 'screenshot.jpg');
+
+                const response = await fetch(`${CLOUD_URL}/api/frames/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    uploadCount++;
+                    uploadCountEl.textContent = uploadCount;
+                    statusEl.textContent = '🟢 Conectado';
+                    statusEl.className = 'connected';
+                    console.log(`✅ Frame ${frameCount} enviado com sucesso`);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+            } catch (error) {
+                errorCount++;
+                errorCountEl.textContent = errorCount;
+                statusEl.textContent = '🔴 Erro';
+                statusEl.className = 'disconnected';
+                console.error('❌ Erro ao capturar/enviar:', error);
+            } finally {
+                isUploading = false;
+            }
+        }
+
+        // Método alternativo: usar screenshot da janela atual
+        async function captureScreenshot() {
+            if (isUploading) return;
+
+            try {
+                isUploading = true;
+                statusEl.textContent = '🟡 Capturando';
+                statusEl.className = 'uploading';
+
+                // Captura simplificada para OBS
+                const canvas = document.createElement('canvas');
+                canvas.width = window.screen.width;
+                canvas.height = window.screen.height;
+
+                // Aguardar OBS injetar a captura
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Converter canvas para blob
+                const blob = await new Promise(resolve =>
+                    canvas.toBlob(resolve, 'image/jpeg', 0.85)
+                );
+
+                frameCount++;
+                frameCountEl.textContent = frameCount;
+
+                // Enviar para nuvem
+                statusEl.textContent = '🟡 Enviando';
+
+                const formData = new FormData();
+                formData.append('file', blob, 'frame.jpg');
+
+                const response = await fetch(`${CLOUD_URL}/api/frames/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    uploadCount++;
+                    uploadCountEl.textContent = uploadCount;
+                    statusEl.textContent = '🟢 Ativo';
+                    statusEl.className = 'connected';
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+            } catch (error) {
+                errorCount++;
+                errorCountEl.textContent = errorCount;
+                statusEl.textContent = '🔴 Erro';
+                statusEl.className = 'disconnected';
+                console.error('Erro:', error);
+            } finally {
+                isUploading = false;
+            }
+        }
+
+        // Iniciar captura automática
+        console.log('🚀 Iniciando captura em nuvem...');
+        setInterval(captureScreenshot, CAPTURE_INTERVAL);
+    </script>
+</body>
+</html>
