@@ -45,6 +45,7 @@ COPY backend/ /app/backend/
 # Copy all dashboard HTML files
 COPY dashboard-obs.html /app/
 COPY dashboard-v2.html /app/
+COPY capture-obs.html /app/
 COPY dashboard-player.html /app/backend/
 COPY dashboard-viewer.html /app/backend/
 COPY dashboard-strategist.html /app/backend/
