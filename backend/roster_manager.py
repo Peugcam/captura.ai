@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 from src.multi_api_client import MultiAPIClient
-from .team_history import get_history_manager
+from team_history import get_history_manager
 
 logger = logging.getLogger(__name__)
 
@@ -227,11 +227,11 @@ EXAMPLES:
             if "tag" not in team or not team["tag"]:
                 continue
 
-            # Ensure tag is uppercase and stripped
-            team["tag"] = str(team["tag"]).strip().upper()
+            # Ensure tag is stripped (preserve case)
+            team["tag"] = str(team["tag"]).strip()
 
             # Skip invalid tags (too short or too long)
-            if len(team["tag"]) < 2 or len(team["tag"]) > 10:
+            if len(team["tag"]) < 2 or len(team["tag"]) > 14:
                 continue
 
             # Ensure full_name exists
@@ -410,8 +410,16 @@ EXAMPLES:
         return False
 
     def get_team(self, tag: str) -> Optional[TournamentTeam]:
-        """Get team by tag"""
-        return self.teams.get(tag.strip().upper())
+        """Get team by tag (case-insensitive search)"""
+        tag_search = tag.strip()
+        # Try exact match first
+        if tag_search in self.teams:
+            return self.teams[tag_search]
+        # Try case-insensitive search
+        for team_tag, team in self.teams.items():
+            if team_tag.lower() == tag_search.lower():
+                return team
+        return None
 
     def get_all_teams(self) -> List[Dict]:
         """Get all teams as serializable dicts"""
@@ -466,12 +474,15 @@ EXAMPLES:
             True se adicionado/substituído com sucesso
         """
         try:
-            team_tag = team_tag.strip().upper()
-            team = self.teams.get(team_tag)
+            # Usar get_team para busca case-insensitive
+            team = self.get_team(team_tag)
 
             if not team:
                 logger.warning(f"Team {team_tag} not found in roster")
                 return False
+
+            # Usar a tag correta do time encontrado
+            team_tag = team.tag
 
             # Verificar se player já existe
             if player_name in team.players:
@@ -520,12 +531,15 @@ EXAMPLES:
             True se atualizado com sucesso
         """
         try:
-            team_tag = team_tag.strip().upper()
-            team = self.teams.get(team_tag)
+            # Usar get_team para busca case-insensitive
+            team = self.get_team(team_tag)
 
             if not team:
                 logger.warning(f"Team {team_tag} not found")
                 return False
+
+            # Usar a tag correta do time encontrado
+            team_tag = team.tag
 
             if player_name not in team.players:
                 logger.warning(f"Player {player_name} not found in team {team_tag}")

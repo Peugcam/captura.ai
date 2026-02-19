@@ -152,17 +152,184 @@ class VisionProcessor:
         else:
             logger.debug("⚠️ Gemini fallback disabled")
 
-    def get_prompt_for_game(self, game_type: str) -> str:
+        # GTA Server Detection (Dual-Server Support)
+        self.detected_server = None  # Will be set after first detection
+        self.server_detection_confidence = 0.0
+        self.auto_detect_server = config.AUTO_DETECT_SERVER
+        self.forced_server_type = config.GTA_SERVER_TYPE if config.GTA_SERVER_TYPE != "auto" else None
+
+        if self.forced_server_type:
+            logger.info(f"🎮 GTA Server Type: {self.forced_server_type} (forced via config)")
+        elif self.auto_detect_server:
+            logger.info("🎮 GTA Server Type: auto-detection enabled")
+        else:
+            logger.info("🎮 GTA Server Type: using generic prompt")
+
+    def detect_gta_server_type(self, image_base64: str) -> tuple[str, float]:
         """
-        Retorna prompt otimizado baseado no tipo de jogo
+        Detecta qual servidor GTA está sendo usado baseado no layout visual do killfeed
+
+        Args:
+            image_base64: Screenshot em base64
+
+        Returns:
+            Tuple (server_type, confidence) onde:
+            - server_type: "server1", "server2", ou "unknown"
+            - confidence: 0.0 a 1.0
+        """
+        try:
+            detection_prompt = """Analyze this GTA V screenshot and identify which server UI layout is being used.
+
+There are 2 possible server types with different visual characteristics:
+
+SERVER 1 INDICATORS:
+- Kill feed in TOP-RIGHT corner
+- White text with red highlights
+- Format: [KILLER] killed [VICTIM]
+- Standard skull icon 💀
+- Compact, right-aligned kill feed box
+- Semi-transparent dark background
+
+SERVER 2 INDICATORS:
+- Kill feed in TOP-CENTER or different position
+- Cyan/blue/yellow color tones
+- Format: KILLER → VICTIM or KILLER ☠️ VICTIM
+- Different skull icons: ☠️ 💀 ⚰️
+- Wider, center-aligned kill feed box
+- Different background style
+
+Respond ONLY with valid JSON:
+{
+  "server_type": "server1" or "server2" or "unknown",
+  "confidence": 0.0 to 1.0,
+  "indicators_found": ["list of visual cues that led to this classification"]
+}"""
+
+            # Use Vision API para detecção
+            response = self.client.chat_completion(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": detection_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=300
+            )
+
+            # Parse response
+            import json
+            result_text = response['choices'][0]['message']['content'].strip()
+
+            # Remove markdown code blocks if present
+            if result_text.startswith("```"):
+                result_text = result_text.split("```")[1]
+                if result_text.startswith("json"):
+                    result_text = result_text[4:]
+
+            result = json.loads(result_text)
+
+            server_type = result.get("server_type", "unknown")
+            confidence = float(result.get("confidence", 0.0))
+            indicators = result.get("indicators_found", [])
+
+            logger.info(f"🎮 Server detected: {server_type} (confidence: {confidence:.2f})")
+            logger.debug(f"   Indicators: {indicators}")
+
+            return server_type, confidence
+
+        except Exception as e:
+            logger.error(f"❌ Error detecting server type: {e}")
+            return "unknown", 0.0
+
+    def get_server_specific_prompt(self, server_type: str) -> Optional[str]:
+        """
+        Carrega prompt específico do servidor
+
+        Args:
+            server_type: "server1" ou "server2"
+
+        Returns:
+            Conteúdo do prompt ou None se não encontrado
+        """
+        try:
+            prompt_file = f"prompts/gta_{server_type}.txt"
+
+            # Try multiple paths
+            search_paths = [
+                os.path.join(os.path.dirname(__file__), prompt_file),
+                os.path.join(os.path.dirname(__file__), "..", prompt_file),
+                prompt_file
+            ]
+
+            for path in search_paths:
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        logger.debug(f"✅ Loaded server-specific prompt from: {path}")
+                        return content
+
+            logger.warning(f"⚠️ Server-specific prompt not found: {prompt_file}")
+            return None
+
+        except Exception as e:
+            logger.error(f"❌ Error loading server prompt: {e}")
+            return None
+
+    def get_prompt_for_game(self, game_type: str, image_base64: Optional[str] = None) -> str:
+        """
+        Retorna prompt otimizado baseado no tipo de jogo (com detecção automática de servidor para GTA)
 
         Args:
             game_type: Tipo do jogo ('gta' ou 'naruto')
+            image_base64: Screenshot (opcional, usado para detecção automática de servidor GTA)
 
         Returns:
             Prompt otimizado
         """
         if game_type == "gta":
+            # Server Detection Logic
+            server_type_to_use = None
+
+            # Priority 1: Forced server type from config
+            if self.forced_server_type:
+                server_type_to_use = self.forced_server_type
+                logger.debug(f"🎮 Using forced server type: {server_type_to_use}")
+
+            # Priority 2: Already detected server (cache)
+            elif self.detected_server and self.server_detection_confidence >= config.SERVER_DETECTION_CONFIDENCE:
+                server_type_to_use = self.detected_server
+                logger.debug(f"🎮 Using cached server type: {server_type_to_use} (confidence: {self.server_detection_confidence:.2f})")
+
+            # Priority 3: Auto-detect from current frame
+            elif self.auto_detect_server and image_base64:
+                detected, confidence = self.detect_gta_server_type(image_base64)
+
+                if confidence >= config.SERVER_DETECTION_CONFIDENCE:
+                    self.detected_server = detected
+                    self.server_detection_confidence = confidence
+                    server_type_to_use = detected
+                    logger.info(f"🎮 Auto-detected server: {detected} (confidence: {confidence:.2f})")
+                else:
+                    logger.warning(f"⚠️ Low confidence detection ({confidence:.2f}), using generic prompt")
+
+            # Load server-specific prompt if available
+            if server_type_to_use in ["server1", "server2"]:
+                server_prompt = self.get_server_specific_prompt(server_type_to_use)
+                if server_prompt:
+                    return server_prompt
+                else:
+                    logger.warning(f"⚠️ Server-specific prompt not found for {server_type_to_use}, using generic")
+
+            # Fallback: Generic GTA prompt
+            logger.debug("🎮 Using generic GTA prompt")
             return """Analyze these GTA V Battle Royale gameplay screenshots for KILL NOTIFICATIONS.
 
 🎯 PRIMARY FOCUS: KILL FEED in TOP-RIGHT CORNER
@@ -553,7 +720,9 @@ CRITICAL: Pay CLOSE attention to any text that looks like "X COMBO" or "X HIT" -
             frames_base64 = [self.apply_roi_to_base64(frame) for frame in frames_base64]
 
         # Obter prompt otimizado baseado no tipo de jogo
-        prompt = self.get_prompt_for_game(config.GAME_TYPE)
+        # Para GTA, usa o primeiro frame para detecção automática de servidor
+        first_frame = frames_base64[0] if frames_base64 else None
+        prompt = self.get_prompt_for_game(config.GAME_TYPE, image_base64=first_frame)
 
         try:
             logger.info(f"🤖 Sending {len(frames_base64)} frames to GPT-4o")
@@ -628,7 +797,15 @@ CRITICAL: Pay CLOSE attention to any text that looks like "X COMBO" or "X HIT" -
 class FrameProcessor:
     """Processador completo de frames"""
 
-    def __init__(self):
+    def __init__(self, roster_manager=None, connection_manager=None):
+        # Tournament Integration
+        self.roster_manager = roster_manager
+        self.manager = connection_manager  # WebSocket manager para broadcasts
+        if roster_manager:
+            logger.info("🏆 Tournament Mode: Roster Manager connected")
+        if connection_manager:
+            logger.info("📡 WebSocket Manager connected for broadcasts")
+
         # NASA-Level Optimization: Frame Deduplication
         self.deduplicator = None
         if config.USE_FRAME_DEDUP:
@@ -862,6 +1039,78 @@ class FrameProcessor:
         self.recent_kills[kill_hash] = current_time
         return False
 
+    def _register_player_in_tournament(self, player_name: str, team_tag: str, is_kill: bool, update_stats: bool = True):
+        """
+        Registra player no torneio automaticamente quando detectado
+        AGORA THREAD-SAFE usando métodos do roster_manager
+
+        Args:
+            player_name: Nome do player
+            team_tag: Tag do time
+            is_kill: True se foi killer, False se victim
+            update_stats: True para atualizar stats (kill/death), False apenas para registrar existência
+        """
+        if not self.roster_manager or not self.roster_manager.tournament_mode:
+            return
+
+        # ✨ NOVA LÓGICA: Aceitar nomes vazios para eventos ambientais
+        if not player_name or not player_name.strip():
+            return
+
+        # Ignorar eventos ambientais/especiais
+        if player_name.upper() in ['QUEDA', 'AFOGAMENTO', 'SUICÍDIO', 'AMBIENTE', 'UNKNOWN', '?', '-']:
+            return
+
+        # Verificar se o time existe no torneio
+        team = self.roster_manager.get_team(team_tag)
+        if not team:
+            logger.debug(f"⚠️ Team {team_tag} not in tournament roster")
+            return
+
+        # Verificar se player já existe
+        if player_name in team.players:
+            # Player já existe, atualizar stats de forma segura APENAS se update_stats=True
+            if update_stats:
+                self.roster_manager.update_player_stats(
+                    team_tag=team_tag,
+                    player_name=player_name,
+                    killed=is_kill,
+                    died=not is_kill,  # victim morre
+                    kills_to_add=1 if is_kill else 0
+                )
+                logger.debug(f"📊 Updated {player_name} ({team_tag}) stats")
+            else:
+                logger.debug(f"👁️ Player seen: {player_name} ({team_tag}) - no stat update")
+        else:
+            # Player novo! Adicionar/substituir placeholder de forma segura
+            success = self.roster_manager.add_or_replace_player(team_tag, player_name)
+
+            if success:
+                # Atualizar stats iniciais APENAS se update_stats=True
+                if update_stats:
+                    self.roster_manager.update_player_stats(
+                        team_tag=team_tag,
+                        player_name=player_name,
+                        killed=is_kill,
+                        died=not is_kill,
+                        kills_to_add=1 if is_kill else 0
+                    )
+                logger.info(f"✅ NEW PLAYER added to tournament: {player_name} ({team_tag})")
+
+                # 🔔 BROADCAST: Notificar dashboard de novo player
+                if hasattr(self, 'manager') and self.manager:
+                    import asyncio
+                    asyncio.create_task(self.manager.broadcast({
+                        "type": "player_added",
+                        "data": {
+                            "team_tag": team_tag,
+                            "player_name": player_name,
+                            "teams": self.roster_manager.get_all_teams()
+                        }
+                    }))
+            else:
+                logger.warning(f"⚠️ Could not add {player_name} to {team_tag}")
+
     def process_batch(self, frames_data: List[str]) -> List[Dict]:
         """
         Processa batch de frames com Vision AI
@@ -886,14 +1135,52 @@ class FrameProcessor:
 
                 # Apenas registrar MORTES (não dano/proximidade) no tracker
                 if event_type == 'kill':
-                    self.tracker.register_kill(
-                        killer_name=kill.get('killer', ''),
-                        killer_team=kill.get('killer_team', 'Unknown'),
-                        victim_name=kill.get('victim', ''),
-                        victim_team=kill.get('victim_team', 'Unknown'),
-                        distance=kill.get('distance')
-                    )
-                    self.kills_detected += 1
+                    killer_name = kill.get('killer', '')
+                    killer_team = kill.get('killer_team', 'Unknown')
+                    victim_name = kill.get('victim', '')
+                    victim_team = kill.get('victim_team', 'Unknown')
+
+                    # ✅ Validar killer e victim
+                    has_valid_killer = killer_name and killer_name.strip() and killer_name.upper() not in ['QUEDA', 'AFOGAMENTO', 'SUICÍDIO', 'AMBIENTE', 'UNKNOWN', '?', '-']
+                    has_valid_victim = victim_name and victim_name.strip() and victim_name.upper() not in ['UNKNOWN', '?', '-']
+
+                    # Registrar kill COMPLETA no tracker (killer + victim conhecidos)
+                    if has_valid_killer and has_valid_victim:
+                        self.tracker.register_kill(
+                            killer_name=killer_name,
+                            killer_team=killer_team,
+                            victim_name=victim_name,
+                            victim_team=victim_team,
+                            distance=kill.get('distance')
+                        )
+                        self.kills_detected += 1
+                        logger.info(f"🎯 KILL confirmed: {killer_name} ({killer_team}) → {victim_name} ({victim_team})")
+
+                        # 🏆 Registrar AMBOS os jogadores no torneio
+                        if self.roster_manager and self.roster_manager.tournament_mode:
+                            self._register_player_in_tournament(killer_name, killer_team, is_kill=True)
+                            self._register_player_in_tournament(victim_name, victim_team, is_kill=False)
+
+                    # 💀 NOVO: Registrar MORTE mesmo sem killer conhecido (morte por ambiente/desconhecido)
+                    elif has_valid_victim and self.roster_manager and self.roster_manager.tournament_mode:
+                        # Vítima identificada mas killer desconhecido → registrar morte
+                        self._register_player_in_tournament(victim_name, victim_team, is_kill=False, update_stats=True)
+                        logger.info(f"💀 DEATH confirmed: {victim_name} ({victim_team}) - killer unknown")
+
+                        # Também registrar killer se válido (mas sem atualizar stats de kill)
+                        if has_valid_killer:
+                            self._register_player_in_tournament(killer_name, killer_team, is_kill=False, update_stats=False)
+                            logger.info(f"👤 Player detected: {killer_name} ({killer_team}) - action seen")
+
+                    # 🔍 Registrar jogadores detectados INDIVIDUALMENTE (apenas presença, sem stats)
+                    elif self.roster_manager and self.roster_manager.tournament_mode:
+                        if has_valid_killer:
+                            self._register_player_in_tournament(killer_name, killer_team, is_kill=False, update_stats=False)
+                            logger.info(f"👤 Player detected: {killer_name} ({killer_team}) - action seen")
+
+                        if has_valid_victim:
+                            self._register_player_in_tournament(victim_name, victim_team, is_kill=False, update_stats=False)
+                            logger.info(f"👤 Player detected: {victim_name} ({victim_team}) - action seen")
 
                 # Mas adicionar TODOS os eventos únicos para retornar
                 unique_kills.append(kill)
