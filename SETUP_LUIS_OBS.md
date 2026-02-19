@@ -64,10 +64,23 @@ Clique **OK**
 Quando a página carregar no OBS, ela vai pedir permissão para capturar a tela.
 
 1. Uma janela do Windows vai aparecer perguntando qual tela você quer compartilhar
-2. Selecione **"Tela Inteira"** ou **"Janela do GTA V"**
+2. **ESCOLHA UMA DAS OPÇÕES ABAIXO:**
+
+**🎯 OPÇÃO 1 (RECOMENDADA): Janela do GTA V**
+- Selecione **"Janela: Grand Theft Auto V"** da lista
+- ✅ Funciona com **QUALQUER RESOLUÇÃO** (1920x1080, 1100x1080, etc.)
+- ✅ Captura **SÓ O JOGO** (não pega Discord, Spotify, etc.)
+- ✅ **Mais eficiente** (menos dados, upload mais rápido)
+- ✅ **Melhor para resoluções competitivas** (1100x1080, 1440x1080, etc.)
+
+**🖥️ OPÇÃO 2: Tela Inteira**
+- Selecione **"Tela Inteira"** ou **"Este Monitor"**
+- ⚠️ Captura TUDO que está na tela (incluindo Discord, navegador, etc.)
+- ⚠️ Pode ter informações pessoais visíveis
+
 3. Clique em **"Compartilhar"**
 
-**⚠️ ATENÇÃO:** Você precisa fazer isso **TODA VEZ** que abrir o OBS. É limitação de segurança do navegador, não tem como automatizar.
+**⚠️ ATENÇÃO:** Você precisa fazer isso **TODA VEZ** que abrir o OBS. É limitação de segurança do navegador, não tem como automatizar. **MAS SÃO APENAS 2 CLIQUES!**
 
 ---
 
@@ -77,10 +90,13 @@ Você deve ver na fonte do OBS:
 
 ```
 🟢 Conectado
+📐 Resolução detectada: 1100x1080 (ou a resolução que você joga)
 Frames capturados: 0
 Uploads sucesso: 0
 Último upload: --:--:--
 ```
+
+**O sistema detecta automaticamente sua resolução!** Não precisa configurar nada.
 
 ---
 
@@ -126,6 +142,36 @@ Dentro do OBS, você vai ver:
 ```
 
 **Se estiver assim, está funcionando!**
+
+---
+
+## ❓ **PERGUNTAS FREQUENTES (FAQ)**
+
+### **P: Jogo em 1100x1080 (resolução competitiva), vai funcionar?**
+✅ **SIM!** O sistema detecta automaticamente sua resolução. Não importa se é 1920x1080, 1100x1080, 1440x900, ou qualquer outra. **Funciona com TODAS as resoluções.**
+
+### **P: Preciso abrir o site no navegador como antes?**
+❌ **NÃO!** Agora você só precisa abrir o OBS. A captura acontece dentro do OBS, não precisa navegador aberto.
+
+### **P: O OBS que eu já uso para gravar vai funcionar?**
+✅ **SIM!** Você pode usar o mesmo OBS que já tem. Só adiciona mais uma "fonte" (Browser Source). **NÃO INTERFERE** com suas gravações/streams.
+
+### **P: Tem conflito se eu estiver gravando/streamando ao mesmo tempo?**
+❌ **NÃO!** O Analytics funciona em paralelo. Você pode:
+- Gravar gameplay
+- Fazer live na Twitch/YouTube
+- Usar o Analytics
+**TUDO AO MESMO TEMPO** sem conflito.
+
+### **P: Toda vez que abrir o OBS precisa permitir captura?**
+✅ **SIM.** É limitação de segurança do navegador. **MAS SÃO APENAS 2 CLIQUES:**
+1. Selecionar "Janela: Grand Theft Auto V"
+2. Clicar "Compartilhar"
+
+**Leva 5 segundos!**
+
+### **P: E se eu esquecer de permitir a captura?**
+⚠️ O sistema vai mostrar **"Permissão negada"** no status. É só apertar F5 na fonte do OBS e permitir de novo.
 
 ---
 

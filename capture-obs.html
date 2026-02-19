@@ -252,12 +252,15 @@
                 updateStatus('uploading', 'Capturando frame...');
 
                 // Capturar tela usando getDisplayMedia
+                // IMPORTANTE: Quando a janela de permissão aparecer, selecione:
+                // - "Janela: Grand Theft Auto V" (RECOMENDADO) - Funciona com qualquer resolução
+                // - OU "Tela Inteira" - Se quiser capturar tudo
                 const stream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        frameRate: { ideal: 1 }
-                    }
+                        // Aceita qualquer resolução (1920x1080, 1100x1080, etc.)
+                        frameRate: { ideal: 1, max: 1 }
+                    },
+                    audio: false // Não precisa de áudio
                 });
 
                 const video = document.createElement('video');
@@ -271,6 +274,11 @@
                 const canvas = document.getElementById('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
+
+                // Log da resolução detectada (primeira vez)
+                if (frameCount === 0) {
+                    log(`📐 Resolução detectada: ${video.videoWidth}x${video.videoHeight}`, 'success');
+                }
 
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0);
