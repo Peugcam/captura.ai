@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
-from .team_history import get_history_manager
+from team_history import get_history_manager
 
 logger = logging.getLogger(__name__)
 

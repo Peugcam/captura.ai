@@ -245,6 +245,12 @@
         const getWebSocketUrl = (path) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.hostname;
+
+            // Se estiver abrindo como file:// (host vazio), usar localhost:3000
+            if (!host || host === '' || window.location.protocol === 'file:') {
+                return `ws://localhost:3000${path}`;
+            }
+
             if (host === 'localhost' || host === '127.0.0.1') {
                 return `${protocol}//${host}:3000${path}`;
             }

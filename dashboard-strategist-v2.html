@@ -938,6 +938,9 @@
     </div>
 
     <script>
+        // API BASE URL - Use current host for production or localhost for development
+        const API_BASE_URL = window.location.protocol + '//' + window.location.host;
+
         // STATE
         let ws = null;
         let teams = [];
@@ -969,7 +972,9 @@
             document.getElementById('setupModal').classList.remove('show');
         }
 
-        // WEBSOCKET
+        // WEBSOCKET with keepalive
+        let pingInterval = null;
+
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const hostname = window.location.hostname || 'localhost';
@@ -984,12 +989,26 @@
                 console.log('✅ WebSocket connected');
                 updateConnectionStatus(true);
                 loadExistingRoster();
+
+                // Send ping every 30 seconds to keep connection alive
+                if (pingInterval) clearInterval(pingInterval);
+                pingInterval = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 30000);
             };
 
-            ws.onclose = () => {
-                console.log('❌ WebSocket disconnected');
+            ws.onclose = (event) => {
+                console.log('❌ WebSocket disconnected', event.code, event.reason);
                 updateConnectionStatus(false);
+                if (pingInterval) clearInterval(pingInterval);
                 setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('🔴 WebSocket error:', error);
+                updateConnectionStatus(false);
             };
 
             ws.onmessage = (event) => {
@@ -1049,7 +1068,7 @@
 
         async function loadExistingRoster() {
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/roster');
+                const response = await fetch(`${API_BASE_URL}/api/tournament/roster`);
                 const data = await response.json();
 
                 if (data.tournament_mode && data.teams_count > 0) {
@@ -1121,7 +1140,7 @@
             console.log(`🔄 Toggling: ${teamTag} - ${playerName} (current: ${currentStatus})`);
 
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/player/status', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/player/status`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1186,7 +1205,7 @@
             formData.append('file', selectedImage);
 
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/roster/upload', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/roster/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1243,7 +1262,7 @@
             startBtn.style.opacity = '0.7';
 
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/roster/manual', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/roster/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1297,7 +1316,7 @@
             if (!confirm('Resetar partida? Todos os players serão marcados como vivos.')) return;
 
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/match/reset', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/match/reset`, {
                     method: 'POST'
                 });
 
@@ -1314,7 +1333,7 @@
             if (!confirm('Limpar toda a lista? Isso sairá do modo torneio.')) return;
 
             try {
-                const response = await fetch('http://localhost:3000/api/tournament/roster/clear', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/roster/clear`, {
                     method: 'POST'
                 });
 
@@ -1933,7 +1952,7 @@
                 });
 
                 // Method 1: Try to use roster/manual endpoint to recreate the entire roster
-                const response = await fetch('http://localhost:3000/api/tournament/roster/manual', {
+                const response = await fetch(`${API_BASE_URL}/api/tournament/roster/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1953,7 +1972,7 @@
                         for (const player of team.players) {
                             if (!player.alive) {
                                 // Mark dead players
-                                await fetch('http://localhost:3000/api/tournament/player/status', {
+                                await fetch(`${API_BASE_URL}/api/tournament/player/status`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
@@ -1980,7 +1999,7 @@
         }
 
         function exportExcel() {
-            window.location.href = 'http://localhost:3000/export';
+            window.location.href = `${API_BASE_URL}/export`;
         }
 
         function updateStats() {

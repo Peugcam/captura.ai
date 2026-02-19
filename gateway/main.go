@@ -86,6 +86,13 @@ func main() {
 
 	mux.HandleFunc("/health", healthHandler)
 
+	// HTTP upload endpoint for OBS Browser Source
+	if *enableWebSocket {
+		mux.HandleFunc("/upload", uploadHandler(wsHandler))
+	} else if *enableWebRTC {
+		mux.HandleFunc("/upload", uploadHandlerWebRTC(webrtcHandler))
+	}
+
 	// Start IPC server (Unix Socket / Named Pipe)
 	if *enableIPC && primaryHandler != nil {
 		ipcServer, err := NewIPCServer()

@@ -1,0 +1,78 @@
+        <!-- TAB 2: KILL FEED -->
+        <div class="tab-content">
+            <!-- KILL FEED CONTROLS -->
+            <div class="panel" style="margin-bottom: 12px;">
+                <div class="panel-header purple">
+                    🔍 Filtros e Controles
+                </div>
+                <div class="panel-content">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto auto; gap: 10px; align-items: center;">
+                        <input type="text" id="killSearchInput" placeholder="🔍 Buscar jogador..."
+                            style="padding: 8px 12px; background: rgba(30, 30, 50, 0.6); border: 1px solid #2a2d35; border-radius: 6px; color: #fff; font-size: 14px;"
+                            oninput="filterKillFeed()">
+                        <select id="teamFilterSelect" style="padding: 8px 12px; background: rgba(30, 30, 50, 0.6); border: 1px solid #2a2d35; border-radius: 6px; color: #fff; font-size: 14px;" onchange="filterKillFeed()">
+                            <option value="all">🏷️ Todos os Times</option>
+                        </select>
+                        <select id="eventTypeFilter" style="padding: 8px 12px; background: rgba(30, 30, 50, 0.6); border: 1px solid #2a2d35; border-radius: 6px; color: #fff; font-size: 14px;" onchange="filterKillFeed()">
+                            <option value="all">📊 Todos os Eventos</option>
+                            <option value="kill">💀 Kills</option>
+                            <option value="damage">⚔️ Dano</option>
+                            <option value="heal">✚ Cura</option>
+                        </select>
+                        <select id="killTypeFilter" style="padding: 8px 12px; background: rgba(30, 30, 50, 0.6); border: 1px solid #2a2d35; border-radius: 6px; color: #fff; font-size: 14px;" onchange="filterKillFeed()">
+                            <option value="all">🔫 Todos os Tipos</option>
+                            <option value="weapon">🔫 Arma</option>
+                            <option value="explosion">💥 Explosão</option>
+                            <option value="vehicle">🚗 Veículo</option>
+                            <option value="fall">🪂 Queda</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="exportKillFeed()" style="white-space: nowrap;">📥 Exportar</button>
+                        <button class="btn btn-warning" onclick="clearKillFeed()" style="white-space: nowrap;">🗑️ Limpar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KILL FEED STATS -->
+            <div class="panel" style="margin-bottom: 12px;">
+                <div class="panel-header blue">
+                    📊 Estatísticas do Kill Feed
+                </div>
+                <div class="panel-content">
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;" id="killFeedStats">
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #ef4444;" id="totalKills">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Total Kills</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;" id="uniqueKillers">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Killers Únicos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #f59e0b;" id="explosionKills">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Explosões</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #10b981;" id="vehicleKills">0</div>
+                            <div style="font-size: 12px; color: #6b7280;">Veículos</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold; color: #8b5cf6;" id="topKiller">-</div>
+                            <div style="font-size: 12px; color: #6b7280;">Top Killer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KILL FEED LIST -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header red">
+                    ⚔️ Kill Feed em Tempo Real <span id="killFeedCount" style="font-size: 12px; opacity: 0.7;">(0 eventos)</span>
+                </div>
+                <div class="panel-content" id="killFeedContent">
+                    <div class="empty-state">
+                        <h2>Aguardando Kills</h2>
+                        <p>Os eventos de combate aparecerão aqui</p>
+                    </div>
+                </div>
+            </div>
+        </div>

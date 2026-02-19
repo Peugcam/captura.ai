@@ -519,6 +519,15 @@ async def serve_v2_dashboard():
     return FileResponse(dashboard_path, media_type="text/html")
 
 
+@app.get("/capture-obs")
+async def serve_obs_capture():
+    """Serve OBS Browser Source capture page"""
+    capture_path = os.path.join(os.path.dirname(__file__), "..", "capture-obs.html")
+    if not os.path.exists(capture_path):
+        raise HTTPException(status_code=404, detail="OBS capture page not found")
+    return FileResponse(capture_path, media_type="text/html")
+
+
 @app.post("/export")
 async def export_to_excel(format: str = "luis", api_key: str = Depends(verify_api_key)):
     """

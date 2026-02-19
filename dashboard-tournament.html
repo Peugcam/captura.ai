@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA Tournament Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.4em;
+            margin-bottom: 5px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            font-size: 0.85em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(250, 112, 154, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: 2px solid #f5576c;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .curator-mode-indicator {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #f5576c;
+            font-size: 0.9em;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+
+        .curator-mode-indicator.active {
+            display: block;
+            color: #f5576c;
+        }
+
+        /* Phase 2: Auto-protection indicator */
+        .auto-protection-indicator {
+            position: fixed;
+            top: 120px;
+            right: 20px;
+            padding: 8px 15px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #3498db;
+            font-size: 0.8em;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            color: #3498db;
+        }
+
+        .auto-protection-indicator.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Server Detection Indicator */
+        .server-indicator {
+            position: fixed;
+            top: 170px;
+            right: 20px;
+            padding: 8px 15px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #9b59b6;
+            font-size: 0.8em;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            color: #9b59b6;
+        }
+
+        .server-indicator.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .server-indicator.server1 {
+            border-color: #e67e22;
+            color: #e67e22;
+        }
+
+        .server-indicator.server2 {
+            border-color: #1abc9c;
+            color: #1abc9c;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .notification-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            font-size: 0.95em;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            border: 2px solid;
+            max-width: 350px;
+        }
+
+        .notification-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification-toast.success {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.2);
+        }
+
+        .notification-toast.error {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.2);
+        }
+
+        .notification-toast.warning {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.2);
+        }
+
+        .notification-toast.info {
+            border-color: #3498db;
+            background: rgba(52, 152, 219, 0.2);
+        }
+
+        /* Setup Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a1a2e;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .upload-section,
+        .manual-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .upload-section h3,
+        .manual-section h3 {
+            margin-bottom: 15px;
+            color: #4ecdc4;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            border-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        #imageFile {
+            display: none;
+        }
+
+        .team-input-container {
+            margin-bottom: 15px;
+        }
+
+        .team-row {
+            display: grid;
+            grid-template-columns: 100px 1fr auto;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .team-row input {
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            font-size: 14px;
+        }
+
+        .player-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px;
+        }
+
+        .btn-remove {
+            padding: 10px 15px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* Tournament Grid - GRID LAYOUT (Original que funcionava) */
+        .tournament-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            margin-top: 15px;
+            max-height: calc(100vh - 250px);
+            overflow-y: auto;
+        }
+
+        .team-box {
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.95), rgba(20, 20, 35, 0.95));
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid #667eea;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .team-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .team-box.eliminated {
+            opacity: 0.4;
+        }
+
+        .team-box.eliminated::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        .team-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .team-tag {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .team-stats {
+            display: flex;
+            gap: 8px;
+            font-size: 0.75em;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.7em;
+            color: #888;
+            margin-bottom: 1px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 1em;
+            color: #fff;
+        }
+
+        .player-indicators {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            margin-top: 6px;
+        }
+
+        .player-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 3px;
+            transition: all 0.2s;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.4);
+            user-select: none;
+        }
+
+        .player-box.alive {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border-color: #2ecc71;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.4);
+        }
+
+        .player-box.alive:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(46, 204, 113, 0.6);
+        }
+
+        .player-box.dead {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            border-color: #7f8c8d;
+            box-shadow: none;
+            opacity: 0.6;
+        }
+
+        .player-box.dead:hover {
+            opacity: 0.8;
+            transform: scale(1.1);
+        }
+
+        .player-box.revived {
+            animation: revivePulse 1s ease;
+        }
+
+        .player-box.empty {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            cursor: not-allowed;
+            opacity: 0.3;
+        }
+
+        @keyframes revivePulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+                box-shadow: 0 0 20px rgba(46, 204, 113, 0.8);
+            }
+        }
+
+        .player-kills {
+            font-size: 0.85em;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+
+        .player-tooltip {
+            pointer-events: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75em;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 10;
+        }
+
+        .player-box:hover .player-tooltip {
+            opacity: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state h2 {
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-item .label {
+            font-size: 0.7em;
+            color: #888;
+            margin-bottom: 2px;
+        }
+
+        .status-item .value {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid;
+            font-size: 0.9em;
+            font-weight: 600;
+            z-index: 100;
+        }
+
+        .connection-status.connected {
+            border-color: #2ecc71;
+            color: #2ecc71;
+        }
+
+        .connection-status.disconnected {
+            border-color: #e74c3c;
+            color: #e74c3c;
+        }
+
+        #imagePreview {
+            max-width: 100%;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .extraction-result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .extraction-result.success {
+            background: rgba(46, 204, 113, 0.2);
+            border: 1px solid #2ecc71;
+        }
+
+        .extraction-result.error {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status disconnected">
+        ⚫ Desconectado
+    </div>
+
+    <!-- Curator Mode Indicator -->
+    <div id="curatorModeIndicator" class="curator-mode-indicator">
+        🎨 MODO CURADOR ATIVO
+    </div>
+
+    <!-- Phase 2: Auto-Protection Indicator -->
+    <div id="autoProtectionIndicator" class="auto-protection-indicator">
+        🛡️ Proteção Automática: 0 edições ativas
+    </div>
+
+    <!-- Server Detection Indicator -->
+    <div id="serverIndicator" class="server-indicator">
+        🎮 Detectando servidor...
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notificationToast" class="notification-toast"></div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🏆 Rastreador de Torneio GTA</h1>
+        <p>Monitoramento em Tempo Real de Torneio Battle Royale</p>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-primary" onclick="openSetupModal()">⚙️ Configurar Torneio</button>
+            <button class="btn btn-success" onclick="openEditModal()" id="editBtn" style="display:none;">
+                ✏️ Editar Times
+            </button>
+            <button class="btn btn-secondary" onclick="toggleCuratorMode()" id="curatorBtn" style="display:none;">
+                🎨 Ativar Modo Curador
+            </button>
+            <button class="btn btn-success" onclick="resetMatch()" id="resetBtn" style="display:none;">🔄 Resetar Partida</button>
+            <button class="btn btn-danger" onclick="clearRoster()" id="clearBtn" style="display:none;">🗑️ Limpar Lista</button>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar" id="statusBar" style="display:none;">
+        <div class="status-item">
+            <div class="label">Times</div>
+            <div class="value" id="teamsCount">0</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Players Vivos</div>
+            <div class="value alive-count" id="playersAlive">0</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Players Mortos</div>
+            <div class="value kill-count" id="playersDead">0</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Total de Kills</div>
+            <div class="value" id="totalKills">0</div>
+        </div>
+    </div>
+
+    <!-- Tournament Grid -->
+    <div id="tournamentGrid" class="tournament-grid">
+        <div class="empty-state">
+            <h2>📋 Nenhum Torneio Carregado</h2>
+            <p>Clique em "Configurar Torneio" para começar</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Envie uma imagem dos classificados ou digite as tags manualmente</p>
+        </div>
+    </div>
+
+    <!-- Setup Modal -->
+    <div id="setupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🎮 Configuração do Torneio</h2>
+                <p>Extraia times da imagem ou digite manualmente as tags</p>
+            </div>
+
+            <!-- Image Upload Section -->
+            <div class="upload-section">
+                <h3>📸 Opção 1: Upload de Imagem (Extração com IA)</h3>
+                <p style="font-size: 0.9em; color: #888; margin-bottom: 15px;">
+                    Envie uma screenshot da página de classificados do torneio
+                </p>
+                <div class="file-input-wrapper">
+                    <label for="imageFile" class="file-input-label">
+                        <div>📁 Clique para fazer upload da imagem</div>
+                        <div style="font-size: 0.9em; color: #888; margin-top: 5px;">Suporta JPG, PNG (máx 10MB)</div>
+                    </label>
+                    <input type="file" id="imageFile" accept="image/*" onchange="handleImageUpload(event)">
+                </div>
+                <img id="imagePreview" alt="Preview">
+                <div id="extractionResult" class="extraction-result"></div>
+                <button class="btn btn-primary" onclick="extractRoster()" id="extractBtn" style="display:none; margin-top: 15px;">
+                    🤖 Extrair Times com IA
+                </button>
+            </div>
+
+            <!-- Manual Input Section -->
+            <div class="manual-section">
+                <h3>✏️ Opção 2: Input Manual (Lista de Tags)</h3>
+                <p style="font-size: 0.9em; color: #888; margin-bottom: 15px;">
+                    Digite apenas as TAGs dos times (um por linha). A IA irá identificar os jogadores automaticamente durante a partida.
+                </p>
+                <textarea id="teamTagsInput"
+                          placeholder="Digite as tags dos times, uma por linha:&#10;PPP&#10;MTL&#10;SVV&#10;KUSH&#10;LLL&#10;..."
+                          style="width: 100%; min-height: 200px; padding: 15px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); font-size: 1em; font-family: monospace; resize: vertical;"></textarea>
+                <button class="btn btn-success" onclick="saveManualRoster()" style="margin-top: 15px; width: 100%;">✅ Iniciar Torneio</button>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="closeSetupModal()">❌ Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Roster Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Editar Times e Jogadores</h2>
+                <p style="color: #888; font-size: 0.9em;">
+                    Corrija os nomes que a IA detectou automaticamente. Clique em "Salvar" para aplicar as mudanças.
+                </p>
+            </div>
+
+            <div id="editTeamsContainer" style="max-height: 60vh; overflow-y: auto;">
+                <!-- Teams will be dynamically populated here -->
+            </div>
+
+            <div style="text-align: center; margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+                <button class="btn btn-success" onclick="saveRosterEdits()">💾 Salvar Alterações</button>
+                <button class="btn btn-danger" onclick="closeEditModal()">❌ Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const BACKEND_URL = 'http://localhost:3000';
+        const WS_URL = 'ws://localhost:3000/events';
+
+        // State
+        let ws = null;
+        let teams = [];
+        let selectedImage = null;
+        let curatorMode = false; // Curator mode: manual editing, blocks AI updates
+
+        // Phase 2: Automatic protection for manual edits
+        let manualOverrides = new Map(); // Track manual edits with expiration
+        const PROTECTION_WINDOW = 5000; // 5 seconds protection after manual edit
+
+        // Initialize
+        window.addEventListener('load', () => {
+            connectWebSocket();
+            loadExistingRoster();
+
+            // Add event listener ONCE for player box clicks
+            const grid = document.getElementById('tournamentGrid');
+            grid.addEventListener('click', handlePlayerBoxClick);
+            console.log('✅ Event listener added to tournament grid');
+        });
+
+        // WebSocket Connection
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('✅ WebSocket connected');
+                updateConnectionStatus(true);
+            };
+
+            ws.onclose = () => {
+                console.log('❌ WebSocket disconnected');
+                updateConnectionStatus(false);
+                // Reconnect after 3s
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'connection-status connected';
+                status.textContent = '🟢 Conectado';
+            } else {
+                status.className = 'connection-status disconnected';
+                status.textContent = '⚫ Desconectado';
+            }
+        }
+
+        function handleWebSocketMessage(message) {
+            console.log('📨 Message:', message);
+
+            // 🎨 CURATOR MODE FILTER - Block AI updates when in curator mode
+            if (curatorMode) {
+                const aiUpdateTypes = ['player_added', 'kill', 'player_detected'];
+
+                if (aiUpdateTypes.includes(message.type)) {
+                    console.log(`🎨 CURATOR MODE: Blocking AI update of type "${message.type}"`);
+                    return; // Ignore AI updates
+                }
+            }
+
+            // 🛡️ PHASE 2: Auto-protection - Apply manual overrides if active
+            if (message.type === 'player_added' || message.type === 'kill') {
+                cleanExpiredOverrides();
+                if (manualOverrides.size > 0) {
+                    console.log(`🛡️ AUTO-PROTECTION: ${manualOverrides.size} manual overrides active`);
+                }
+            }
+
+            switch (message.type) {
+                case 'roster_loaded':
+                    teams = applyManualOverrides(message.data.teams);
+                    renderTournamentGrid();
+                    closeSetupModal();
+                    showNotification('Torneio carregado com sucesso!', 'success');
+                    break;
+
+                case 'player_status_updated':
+                    // This is our own manual edit response - clear the override
+                    if (message.data.teams) {
+                        const updatedTeams = message.data.teams;
+                        // Find which player was updated and remove from overrides
+                        cleanExpiredOverrides();
+                        teams = applyManualOverrides(updatedTeams);
+                        renderTournamentGrid();
+                    }
+                    break;
+
+                case 'team_added':
+                case 'team_updated':
+                case 'team_removed':
+                    teams = applyManualOverrides(message.data.teams);
+                    renderTournamentGrid();
+                    break;
+
+                case 'match_reset':
+                    // Clear all overrides on reset
+                    manualOverrides.clear();
+                    teams = message.data.teams;
+                    renderTournamentGrid();
+                    showNotification('Partida resetada!', 'success');
+                    break;
+
+                case 'roster_cleared':
+                    // Clear all overrides when roster is cleared
+                    manualOverrides.clear();
+                    teams = [];
+                    renderTournamentGrid();
+                    showNotification('Lista de times limpa', 'success');
+                    break;
+
+                case 'kill':
+                case 'player_added':
+                    // AI detected changes - apply overrides even in AI mode
+                    if (!curatorMode) {
+                        loadExistingRoster();
+                    }
+                    break;
+
+                case 'server_detected':
+                    // Server detection notification
+                    updateServerIndicator(message.data.server_type, message.data.confidence);
+                    break;
+            }
+        }
+
+        function updateServerIndicator(serverType, confidence) {
+            const indicator = document.getElementById('serverIndicator');
+
+            // Remove previous server classes
+            indicator.classList.remove('server1', 'server2');
+
+            if (serverType === 'server1') {
+                indicator.textContent = `🎮 Servidor 1 detectado (${(confidence * 100).toFixed(0)}%)`;
+                indicator.classList.add('server1');
+                indicator.classList.add('active');
+                showNotification(`🎮 Servidor 1 detectado com ${(confidence * 100).toFixed(0)}% de confiança`, 'info', 3000);
+            } else if (serverType === 'server2') {
+                indicator.textContent = `🎮 Servidor 2 detectado (${(confidence * 100).toFixed(0)}%)`;
+                indicator.classList.add('server2');
+                indicator.classList.add('active');
+                showNotification(`🎮 Servidor 2 detectado com ${(confidence * 100).toFixed(0)}% de confiança`, 'info', 3000);
+            } else {
+                // Unknown server - hide indicator
+                indicator.classList.remove('active');
+            }
+        }
+
+        // API Functions
+        async function loadExistingRoster() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tournament/roster`);
+                const data = await response.json();
+
+                if (data.tournament_mode && data.teams_count > 0) {
+                    // 🛡️ PHASE 2: Apply manual overrides to server data
+                    teams = applyManualOverrides(data.teams);
+                    renderTournamentGrid();
+                }
+            } catch (error) {
+                console.error('Error loading roster:', error);
+            }
+        }
+
+        async function extractRoster() {
+            if (!selectedImage) {
+                showNotification('Please select an image first', 'error');
+                return;
+            }
+
+            const extractBtn = document.getElementById('extractBtn');
+            const resultDiv = document.getElementById('extractionResult');
+
+            extractBtn.disabled = true;
+            extractBtn.textContent = '⏳ Extracting...';
+            resultDiv.style.display = 'none';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedImage);
+
+                const response = await fetch(`${BACKEND_URL}/api/tournament/roster/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.className = 'extraction-result success';
+                    resultDiv.textContent = `✅ ${data.message}`;
+                    resultDiv.style.display = 'block';
+
+                    // Will be handled by WebSocket message
+                } else {
+                    resultDiv.className = 'extraction-result error';
+                    resultDiv.textContent = `⚠️ ${data.message}`;
+                    resultDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Extraction error:', error);
+                resultDiv.className = 'extraction-result error';
+                resultDiv.textContent = '❌ Error extracting teams. Please try manual input.';
+                resultDiv.style.display = 'block';
+            } finally {
+                extractBtn.disabled = false;
+                extractBtn.textContent = '🤖 Extract Teams with AI';
+            }
+        }
+
+        async function saveManualRoster() {
+            const tagsInput = document.getElementById('teamTagsInput').value;
+            const lines = tagsInput.split('\n').map(line => line.trim().toUpperCase()).filter(line => line.length > 0);
+
+            if (lines.length === 0) {
+                showNotification('Por favor, adicione pelo menos uma tag de time', 'error');
+                return;
+            }
+
+            // Create teams with only tags (no players yet - AI will detect them during the game)
+            const teamsData = lines.map(tag => ({
+                tag: tag,
+                full_name: '',
+                players: []  // Empty - AI will populate during game
+            }));
+
+            if (teamsData.length > 20) {
+                showNotification('Máximo de 20 times permitido', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tournament/roster/manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ teams: teamsData })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(`${teamsData.length} times carregados com sucesso!`, 'success');
+                    // Will be handled by WebSocket
+                } else {
+                    showNotification('Erro ao salvar roster', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving roster:', error);
+                showNotification('Erro ao salvar roster', 'error');
+            }
+        }
+
+        async function resetMatch() {
+            if (!confirm('Resetar partida? Todos os players serão marcados como vivos e estatísticas zeradas.')) return;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tournament/match/reset`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                // Will be handled by WebSocket
+            } catch (error) {
+                console.error('Error resetting match:', error);
+                showNotification('Erro ao resetar partida', 'error');
+            }
+        }
+
+        async function clearRoster() {
+            if (!confirm('Limpar toda a lista de times? Isso irá sair do modo torneio.')) return;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tournament/roster/clear`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                // Will be handled by WebSocket
+            } catch (error) {
+                console.error('Error clearing roster:', error);
+                showNotification('Erro ao limpar lista', 'error');
+            }
+        }
+
+        async function togglePlayerStatus(teamTag, playerName, currentStatus) {
+            console.log(`🔄 Toggling player: ${teamTag} - ${playerName} (${currentStatus} → ${!currentStatus})`);
+
+            // 🛡️ PHASE 2: Register manual override with protection window
+            const overrideKey = `${teamTag}:${playerName}`;
+            const newStatus = !currentStatus;
+
+            manualOverrides.set(overrideKey, {
+                alive: newStatus,
+                expiresAt: Date.now() + PROTECTION_WINDOW,
+                teamTag: teamTag,
+                playerName: playerName
+            });
+
+            console.log(`🛡️ Manual override registered for ${overrideKey} (protected for ${PROTECTION_WINDOW/1000}s)`);
+
+            // Update visual indicator
+            updateAutoProtectionIndicator();
+
+            // Show subtle notification
+            showNotification(
+                `🛡️ Proteção automática ativa por ${PROTECTION_WINDOW/1000}s`,
+                'info',
+                2000
+            );
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tournament/player/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        team_tag: teamTag,
+                        player_name: playerName,
+                        alive: newStatus
+                    })
+                });
+
+                const data = await response.json();
+                console.log('✅ Response:', data);
+
+                // Will be handled by WebSocket
+            } catch (error) {
+                console.error('❌ Error toggling player status:', error);
+                // Remove override if request failed
+                manualOverrides.delete(overrideKey);
+            }
+        }
+
+        // UI Functions
+        function renderTournamentGrid() {
+            const grid = document.getElementById('tournamentGrid');
+            const statusBar = document.getElementById('statusBar');
+            const resetBtn = document.getElementById('resetBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const curatorBtn = document.getElementById('curatorBtn');
+
+            if (!teams || teams.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h2>📋 Nenhum Torneio Carregado</h2>
+                        <p>Clique em "Configurar Torneio" para começar</p>
+                    </div>
+                `;
+                statusBar.style.display = 'none';
+                resetBtn.style.display = 'none';
+                clearBtn.style.display = 'none';
+                curatorBtn.style.display = 'none';
+                return;
+            }
+
+            // Show controls
+            statusBar.style.display = 'flex';
+            resetBtn.style.display = 'inline-block';
+            clearBtn.style.display = 'inline-block';
+            curatorBtn.style.display = 'inline-block';
+
+            // Calculate stats
+            let totalAlive = 0;
+            let totalDead = 0;
+            let totalKills = 0;
+
+            teams.forEach(team => {
+                totalAlive += team.alive_count;
+                totalDead += team.dead_count;
+                totalKills += team.total_kills;
+            });
+
+            // Update status bar
+            document.getElementById('teamsCount').textContent = teams.length;
+            document.getElementById('playersAlive').textContent = totalAlive;
+            document.getElementById('playersDead').textContent = totalDead;
+            document.getElementById('totalKills').textContent = totalKills;
+
+            // Render teams
+            grid.innerHTML = teams.map(team => {
+                const isEliminated = team.alive_count === 0;
+
+                const playerBoxes = Array(5).fill(null).map((_, index) => {
+                    const players = team.players || [];
+                    const player = players[index];
+
+                    if (!player) {
+                        return `<div class="player-box empty"></div>`;
+                    }
+
+                    const boxClass = player.alive ? 'alive' : 'dead';
+                    const playerName = player.name || `P${index + 1}`;
+                    const killDisplay = player.kills > 0 ? player.kills : '';
+
+                    return `
+                        <div class="player-box ${boxClass}"
+                             onclick="togglePlayerStatus('${team.tag}', '${playerName}', ${player.alive})"
+                             title="${playerName} - ${player.kills} kills (${player.alive ? 'Vivo' : 'Morto'}) - Clique para alterar">
+                            <span class="player-kills">${killDisplay}</span>
+                            <span class="player-tooltip">${playerName} (${player.kills} kills)</span>
+                        </div>
+                    `;
+                }).join('');
+
+                const teamDisplay = team.full_name ? `${team.tag} - ${team.full_name}` : team.tag;
+
+                return `
+                    <div class="team-box ${isEliminated ? 'eliminated' : ''}">
+                        <div class="team-header">
+                            <div class="team-tag" title="${team.full_name || team.tag}">${teamDisplay}</div>
+                            <div class="team-stats">
+                                <div class="stat-item">
+                                    <div class="stat-label">Vivos</div>
+                                    <div class="stat-value">${team.alive_count}/${team.players.length || 5}</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Kills</div>
+                                    <div class="stat-value">${team.total_kills}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="player-indicators">
+                            ${playerBoxes}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function handlePlayerBoxClick(event) {
+            console.log('🖱️ Click event fired on grid', event.target);
+
+            // Find the closest player-box element
+            const playerBox = event.target.closest('.player-box');
+
+            console.log('📦 Closest player-box found:', playerBox);
+
+            if (!playerBox) {
+                console.log('⚠️ No player-box found');
+                return;
+            }
+
+            if (playerBox.classList.contains('empty')) {
+                console.log('⚠️ Player box is empty');
+                return;
+            }
+
+            const teamTag = playerBox.dataset.teamTag;
+            const playerName = playerBox.dataset.playerName;
+            const isAlive = playerBox.dataset.playerAlive === 'true';
+
+            console.log(`🎯 Click detected on player box: ${teamTag} - ${playerName} (alive: ${isAlive})`);
+            togglePlayerStatus(teamTag, playerName, isAlive);
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            selectedImage = file;
+
+            // Show preview
+            const preview = document.getElementById('imagePreview');
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                document.getElementById('extractBtn').style.display = 'block';
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function openSetupModal() {
+            document.getElementById('setupModal').classList.add('active');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('setupModal').classList.remove('active');
+
+            // Clear inputs
+            selectedImage = null;
+            document.getElementById('imageFile').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('extractBtn').style.display = 'none';
+            document.getElementById('extractionResult').style.display = 'none';
+            document.getElementById('teamTagsInput').value = '';
+        }
+
+        function toggleCuratorMode() {
+            curatorMode = !curatorMode;
+
+            const btn = document.getElementById('curatorBtn');
+            const indicator = document.getElementById('curatorModeIndicator');
+
+            if (curatorMode) {
+                // CURATOR MODE ACTIVATED
+                btn.textContent = '🤖 Ativar Modo AI';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-warning');
+                indicator.classList.add('active');
+
+                showNotification(
+                    '🎨 Modo Curador Ativado - Você tem controle total. Atualizações automáticas da AI estão pausadas.',
+                    'warning'
+                );
+
+                console.log('🎨 CURATOR MODE ACTIVE - AI updates blocked');
+            } else {
+                // AI MODE ACTIVATED
+                btn.textContent = '🎨 Ativar Modo Curador';
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-secondary');
+                indicator.classList.remove('active');
+
+                showNotification(
+                    '🤖 Modo AI Ativado - Sistema sincronizando com o servidor...',
+                    'info'
+                );
+
+                console.log('🤖 AI MODE ACTIVE - Syncing with server');
+
+                // Sync with server when returning to AI mode
+                loadExistingRoster();
+            }
+        }
+
+        // ========================================
+        // EDIT ROSTER MODAL FUNCTIONS
+        // ========================================
+
+        function openEditModal() {
+            if (teams.length === 0) {
+                showNotification('❌ Nenhum torneio carregado. Configure um torneio primeiro.', 'error');
+                return;
+            }
+
+            // Populate edit form with current teams
+            populateEditForm();
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        function populateEditForm() {
+            const container = document.getElementById('editTeamsContainer');
+            container.innerHTML = '';
+
+            teams.forEach((team, teamIndex) => {
+                const teamDiv = document.createElement('div');
+                teamDiv.className = 'team-row';
+                teamDiv.style.display = 'block';
+                teamDiv.style.marginBottom = '20px';
+                teamDiv.style.padding = '15px';
+                teamDiv.style.background = 'rgba(255, 255, 255, 0.05)';
+                teamDiv.style.borderRadius = '8px';
+
+                // Team header (tag + full name)
+                const headerDiv = document.createElement('div');
+                headerDiv.style.display = 'grid';
+                headerDiv.style.gridTemplateColumns = '100px 1fr';
+                headerDiv.style.gap = '10px';
+                headerDiv.style.marginBottom = '10px';
+
+                headerDiv.innerHTML = `
+                    <input type="text"
+                           value="${team.tag}"
+                           data-team-index="${teamIndex}"
+                           data-field="tag"
+                           placeholder="TAG"
+                           style="padding: 10px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px; background: rgba(0, 0, 0, 0.3); color: white; font-size: 14px; font-weight: bold; text-transform: uppercase;">
+                    <input type="text"
+                           value="${team.full_name || ''}"
+                           data-team-index="${teamIndex}"
+                           data-field="full_name"
+                           placeholder="Nome Completo do Time (opcional)"
+                           style="padding: 10px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px; background: rgba(0, 0, 0, 0.3); color: white; font-size: 14px;">
+                `;
+
+                // Players section
+                const playersLabel = document.createElement('div');
+                playersLabel.style.marginTop = '10px';
+                playersLabel.style.marginBottom = '5px';
+                playersLabel.style.color = '#4ecdc4';
+                playersLabel.style.fontSize = '0.9em';
+                playersLabel.style.fontWeight = 'bold';
+                playersLabel.textContent = '👥 Jogadores (máx 5):';
+
+                const playersDiv = document.createElement('div');
+                playersDiv.className = 'player-inputs';
+                playersDiv.style.display = 'grid';
+                playersDiv.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
+                playersDiv.style.gap = '8px';
+
+                // Add player input fields (up to 5)
+                const playerNames = Object.keys(team.players || {});
+                for (let i = 0; i < 5; i++) {
+                    const playerName = playerNames[i] || '';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = playerName;
+                    input.placeholder = `Jogador ${i + 1}`;
+                    input.dataset.teamIndex = teamIndex;
+                    input.dataset.playerIndex = i;
+                    input.style.padding = '8px';
+                    input.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                    input.style.borderRadius = '5px';
+                    input.style.background = 'rgba(0, 0, 0, 0.5)';
+                    input.style.color = 'white';
+                    input.style.fontSize = '13px';
+                    playersDiv.appendChild(input);
+                }
+
+                teamDiv.appendChild(headerDiv);
+                teamDiv.appendChild(playersLabel);
+                teamDiv.appendChild(playersDiv);
+                container.appendChild(teamDiv);
+            });
+        }
+
+        async function saveRosterEdits() {
+            const container = document.getElementById('editTeamsContainer');
+            const updatedTeams = [];
+
+            // Collect all edits
+            teams.forEach((team, teamIndex) => {
+                const tagInput = container.querySelector(`input[data-team-index="${teamIndex}"][data-field="tag"]`);
+                const fullNameInput = container.querySelector(`input[data-team-index="${teamIndex}"][data-field="full_name"]`);
+                const playerInputs = container.querySelectorAll(`input[data-team-index="${teamIndex}"][data-player-index]`);
+
+                const newTag = tagInput.value.trim().toUpperCase();
+                const newFullName = fullNameInput.value.trim();
+                const newPlayers = [];
+
+                playerInputs.forEach(input => {
+                    const playerName = input.value.trim();
+                    if (playerName) {
+                        newPlayers.push(playerName);
+                    }
+                });
+
+                if (newTag) {
+                    updatedTeams.push({
+                        oldTag: team.tag,
+                        tag: newTag,
+                        full_name: newFullName,
+                        players: newPlayers
+                    });
+                }
+            });
+
+            // Send updates to backend
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const team of updatedTeams) {
+                try {
+                    const response = await fetch(`${BACKEND_URL}/api/tournament/team/${team.oldTag}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tag: team.tag,
+                            full_name: team.full_name,
+                            players: team.players
+                        })
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                        console.log(`✅ Team ${team.oldTag} updated successfully`);
+                    } else {
+                        errorCount++;
+                        console.error(`❌ Failed to update team ${team.oldTag}`);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error(`❌ Error updating team ${team.oldTag}:`, error);
+                }
+            }
+
+            if (successCount > 0) {
+                showNotification(`✅ ${successCount} time(s) atualizado(s) com sucesso!`, 'success');
+
+                // Reload roster from server
+                await loadExistingRoster();
+
+                closeEditModal();
+            } else {
+                showNotification(`❌ Erro ao salvar alterações. Verifique o console.`, 'error');
+            }
+        }
+
+        function showNotification(message, type = 'info', duration = 4000) {
+            const toast = document.getElementById('notificationToast');
+            toast.textContent = message;
+            toast.className = `notification-toast ${type}`;
+
+            // Show toast
+            setTimeout(() => toast.classList.add('show'), 100);
+
+            // Hide after specified duration
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // ========================================
+        // PHASE 2: AUTOMATIC PROTECTION FUNCTIONS
+        // ========================================
+
+        function cleanExpiredOverrides() {
+            const now = Date.now();
+            let cleaned = 0;
+
+            for (const [key, override] of manualOverrides.entries()) {
+                if (now > override.expiresAt) {
+                    manualOverrides.delete(key);
+                    cleaned++;
+                    console.log(`🛡️ Override expired for ${key}`);
+                }
+            }
+
+            if (cleaned > 0) {
+                console.log(`🛡️ Cleaned ${cleaned} expired overrides`);
+            }
+
+            // Update indicator
+            updateAutoProtectionIndicator();
+        }
+
+        function updateAutoProtectionIndicator() {
+            const indicator = document.getElementById('autoProtectionIndicator');
+            const count = manualOverrides.size;
+
+            if (count > 0) {
+                indicator.textContent = `🛡️ Proteção Automática: ${count} ${count === 1 ? 'edição ativa' : 'edições ativas'}`;
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+
+        function applyManualOverrides(serverTeams) {
+            if (manualOverrides.size === 0) {
+                return serverTeams; // No overrides, return as-is
+            }
+
+            console.log(`🛡️ Applying ${manualOverrides.size} manual overrides to server data`);
+
+            // Clone teams to avoid mutation
+            const mergedTeams = JSON.parse(JSON.stringify(serverTeams));
+
+            // Apply each override
+            for (const [key, override] of manualOverrides.entries()) {
+                const team = mergedTeams.find(t => t.tag === override.teamTag);
+                if (!team) continue;
+
+                const player = team.players.find(p => p.name === override.playerName);
+                if (!player) continue;
+
+                // Override player status
+                if (player.alive !== override.alive) {
+                    console.log(`🛡️ Overriding ${key}: server=${player.alive} → manual=${override.alive}`);
+                    player.alive = override.alive;
+                }
+            }
+
+            // Recalculate team counts
+            mergedTeams.forEach(team => {
+                team.alive_count = team.players.filter(p => p.alive).length;
+                team.dead_count = team.players.length - team.alive_count;
+            });
+
+            return mergedTeams;
+        }
+    </script>
+</body>
+</html>

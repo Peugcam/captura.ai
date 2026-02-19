@@ -91,6 +91,12 @@ OCR_WORKERS = int(os.getenv("OCR_WORKERS", "4"))
 # Game Type (para otimizar prompts e ROI)
 GAME_TYPE = os.getenv("GAME_TYPE", "gta").lower()  # gta ou naruto
 USE_ROI = os.getenv("USE_ROI", "true").lower() == "true"
+
+# GTA Server Detection (Dual-Server Support)
+# Suporta 2 servidores diferentes com layouts de killfeed distintos
+GTA_SERVER_TYPE = os.getenv("GTA_SERVER_TYPE", "auto").lower()  # auto, server1, server2
+AUTO_DETECT_SERVER = os.getenv("AUTO_DETECT_SERVER", "true").lower() == "true"
+SERVER_DETECTION_CONFIDENCE = float(os.getenv("SERVER_DETECTION_CONFIDENCE", "0.80"))  # 80% confiança mínima
 # Keywords OTIMIZADAS para GTA kill detection (Inglês + Português)
 # Suporta GTA em ambos idiomas
 OCR_KEYWORDS = [

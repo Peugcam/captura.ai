@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Kill Feed - GTA Analytics V2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0e1015;
+            color: #ffffff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .panel {
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            color: #6b7280;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            background: rgba(30, 30, 50, 0.6);
+            border: 1px solid #2a2d35;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: #667eea; margin-bottom: 20px;">🧪 Kill Feed Testing Tool</h1>
+
+        <div class="panel">
+            <h2>📡 WebSocket Connection</h2>
+            <div>
+                Status: <span class="status disconnected" id="wsStatus">Desconectado</span>
+            </div>
+            <div style="margin-top: 15px;">
+                <button onclick="connectWebSocket()">🔗 Conectar</button>
+                <button class="danger" onclick="disconnectWebSocket()">🔌 Desconectar</button>
+            </div>
+            <div class="log" id="connectionLog"></div>
+        </div>
+
+        <div class="panel">
+            <h2>🎯 Simular Eventos de Kill</h2>
+
+            <div class="grid">
+                <div class="input-group">
+                    <label>Killer (Nome)</label>
+                    <input type="text" id="killerName" value="JoãoSniper">
+                </div>
+                <div class="input-group">
+                    <label>Killer Team</label>
+                    <select id="killerTeam">
+                        <option>Team Alpha</option>
+                        <option>Team Bravo</option>
+                        <option>Team Charlie</option>
+                        <option>Team Delta</option>
+                        <option>Team Echo</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Victim (Nome)</label>
+                    <input type="text" id="victimName" value="PedroRunner">
+                </div>
+                <div class="input-group">
+                    <label>Victim Team</label>
+                    <select id="victimTeam">
+                        <option>Team Alpha</option>
+                        <option selected>Team Bravo</option>
+                        <option>Team Charlie</option>
+                        <option>Team Delta</option>
+                        <option>Team Echo</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Tipo de Evento</label>
+                    <select id="eventType">
+                        <option value="kill">💀 Kill</option>
+                        <option value="damage">⚔️ Dano</option>
+                        <option value="heal">✚ Cura</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Método de Kill</label>
+                    <select id="killType">
+                        <option value="weapon">🔫 Arma</option>
+                        <option value="explosion">💥 Explosão</option>
+                        <option value="vehicle">🚗 Veículo</option>
+                        <option value="fall">🪂 Queda</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button onclick="sendKillEvent()">🎯 Enviar Kill Event</button>
+                <button onclick="sendRandomKills(5)">🎲 Enviar 5 Kills Aleatórios</button>
+                <button onclick="sendRandomKills(20)">🎲 Enviar 20 Kills Aleatórios</button>
+                <button onclick="testFilters()">🧪 Testar Filtros (Multi-Team)</button>
+            </div>
+
+            <div class="log" id="eventLog"></div>
+        </div>
+
+        <div class="panel">
+            <h2>📋 Instruções de Teste</h2>
+            <ol style="line-height: 1.8; color: #9ca3af;">
+                <li>Abra o dashboard principal (dashboard-strategist-v2.html) em outra aba</li>
+                <li>Conecte ao WebSocket clicando em "🔗 Conectar"</li>
+                <li>Envie eventos de kill simulados e observe no dashboard</li>
+                <li>Teste os filtros no dashboard (por time, jogador, tipo)</li>
+                <li>Verifique se as estatísticas atualizam corretamente</li>
+                <li>Teste a exportação CSV</li>
+                <li>Teste a função de limpar kill feed</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        const teams = ['Team Alpha', 'Team Bravo', 'Team Charlie', 'Team Delta', 'Team Echo'];
+        const names = ['João', 'Pedro', 'Maria', 'Ana', 'Carlos', 'Bruno', 'Rafael', 'Lucas', 'Gabriel', 'Fernando'];
+        const surnames = ['Sniper', 'Runner', 'Tank', 'Ghost', 'Shadow', 'Hawk', 'Wolf', 'Eagle', 'Dragon', 'Phoenix'];
+        const killTypes = ['weapon', 'explosion', 'vehicle', 'fall'];
+        const eventTypes = ['kill', 'damage', 'heal'];
+
+        function log(message, logId = 'connectionLog') {
+            const logElement = document.getElementById(logId);
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span style="color: #6b7280;">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+            logElement.insertBefore(entry, logElement.firstChild);
+        }
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('❌ Já conectado!', 'connectionLog');
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:3000/events');
+
+            ws.onopen = () => {
+                document.getElementById('wsStatus').textContent = 'Conectado';
+                document.getElementById('wsStatus').className = 'status connected';
+                log('✅ Conectado ao WebSocket!', 'connectionLog');
+            };
+
+            ws.onclose = () => {
+                document.getElementById('wsStatus').textContent = 'Desconectado';
+                document.getElementById('wsStatus').className = 'status disconnected';
+                log('🔌 Desconectado', 'connectionLog');
+            };
+
+            ws.onerror = (error) => {
+                log(`❌ Erro: ${error}`, 'connectionLog');
+            };
+
+            ws.onmessage = (event) => {
+                log(`📨 Recebido: ${event.data}`, 'connectionLog');
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendKillEvent() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket não conectado!', 'eventLog');
+                return;
+            }
+
+            const killData = {
+                type: 'kill',
+                data: {
+                    killer: document.getElementById('killerName').value,
+                    killer_team: document.getElementById('killerTeam').value,
+                    victim: document.getElementById('victimName').value,
+                    victim_team: document.getElementById('victimTeam').value,
+                    event_type: document.getElementById('eventType').value,
+                    kill_type: document.getElementById('killType').value,
+                    distance: Math.floor(Math.random() * 500) + 10,
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            ws.send(JSON.stringify(killData));
+            log(`✅ Evento enviado: ${killData.data.killer} → ${killData.data.victim} (${killData.data.kill_type})`, 'eventLog');
+        }
+
+        function getRandomElement(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+
+        function getRandomName() {
+            return getRandomElement(names) + getRandomElement(surnames);
+        }
+
+        function sendRandomKills(count) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket não conectado!', 'eventLog');
+                return;
+            }
+
+            log(`🎲 Enviando ${count} kills aleatórios...`, 'eventLog');
+
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const killData = {
+                        type: 'kill',
+                        data: {
+                            killer: getRandomName(),
+                            killer_team: getRandomElement(teams),
+                            victim: getRandomName(),
+                            victim_team: getRandomElement(teams),
+                            event_type: getRandomElement(eventTypes),
+                            kill_type: getRandomElement(killTypes),
+                            distance: Math.floor(Math.random() * 500) + 10,
+                            timestamp: new Date().toISOString()
+                        }
+                    };
+
+                    ws.send(JSON.stringify(killData));
+                    log(`✅ Kill ${i + 1}/${count}: ${killData.data.killer} → ${killData.data.victim}`, 'eventLog');
+                }, i * 200); // 200ms delay between events
+            }
+        }
+
+        function testFilters() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket não conectado!', 'eventLog');
+                return;
+            }
+
+            log('🧪 Enviando dados de teste para filtros...', 'eventLog');
+
+            // Test scenario: Multiple teams, specific patterns for filtering
+            const testKills = [
+                // Team Alpha kills
+                { killer: 'JoãoSniper', killer_team: 'Team Alpha', victim: 'PedroRunner', victim_team: 'Team Bravo', event_type: 'kill', kill_type: 'weapon' },
+                { killer: 'JoãoSniper', killer_team: 'Team Alpha', victim: 'CarlosTank', victim_team: 'Team Charlie', event_type: 'kill', kill_type: 'explosion' },
+                { killer: 'JoãoSniper', killer_team: 'Team Alpha', victim: 'BrunoGhost', victim_team: 'Team Delta', event_type: 'kill', kill_type: 'weapon' },
+
+                // Team Bravo kills
+                { killer: 'MariaShadow', killer_team: 'Team Bravo', victim: 'JoãoSniper', victim_team: 'Team Alpha', event_type: 'kill', kill_type: 'vehicle' },
+                { killer: 'MariaShadow', killer_team: 'Team Bravo', victim: 'LucasHawk', victim_team: 'Team Echo', event_type: 'kill', kill_type: 'weapon' },
+
+                // Different event types
+                { killer: 'AnaHealer', killer_team: 'Team Charlie', victim: 'RafaelWolf', victim_team: 'Team Delta', event_type: 'damage', kill_type: 'weapon' },
+                { killer: 'AnaHealer', killer_team: 'Team Charlie', victim: 'AnaHealer', victim_team: 'Team Charlie', event_type: 'heal', kill_type: 'weapon' },
+
+                // Vehicle and fall kills
+                { killer: 'GabrielEagle', killer_team: 'Team Delta', victim: 'FernandoDragon', victim_team: 'Team Echo', event_type: 'kill', kill_type: 'vehicle' },
+                { killer: 'FernandoPhoenix', killer_team: 'Team Echo', victim: 'PedroRunner', victim_team: 'Team Bravo', event_type: 'kill', kill_type: 'fall' },
+
+                // More explosions
+                { killer: 'CarlosTank', killer_team: 'Team Charlie', victim: 'MariaShadow', victim_team: 'Team Bravo', event_type: 'kill', kill_type: 'explosion' },
+                { killer: 'CarlosTank', killer_team: 'Team Charlie', victim: 'GabrielEagle', victim_team: 'Team Delta', event_type: 'kill', kill_type: 'explosion' }
+            ];
+
+            testKills.forEach((kill, index) => {
+                setTimeout(() => {
+                    const killData = {
+                        type: 'kill',
+                        data: {
+                            ...kill,
+                            distance: Math.floor(Math.random() * 500) + 10,
+                            timestamp: new Date().toISOString()
+                        }
+                    };
+
+                    ws.send(JSON.stringify(killData));
+                    log(`✅ Test kill ${index + 1}/${testKills.length}: ${kill.killer} → ${kill.victim}`, 'eventLog');
+                }, index * 300);
+            });
+
+            setTimeout(() => {
+                log('✅ Teste completo! Agora teste os filtros no dashboard:', 'eventLog');
+                log('  - Filtrar por "Team Alpha" (deve mostrar 4 kills)', 'eventLog');
+                log('  - Buscar "JoãoSniper" (deve mostrar 4 eventos)', 'eventLog');
+                log('  - Filtrar por tipo "explosion" (deve mostrar 3 kills)', 'eventLog');
+                log('  - Filtrar por tipo "vehicle" (deve mostrar 2 kills)', 'eventLog');
+            }, testKills.length * 300 + 500);
+        }
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            setTimeout(connectWebSocket, 500);
+        });
+    </script>
+</body>
+</html>

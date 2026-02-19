@@ -1,0 +1,80 @@
+UNIFIED STRATEGIST DASHBOARD - COMPREHENSIVE ANALYSIS
+
+Dashboard Viewer: 730 lines (Analytics Focus)
+Dashboard Tournament: 1553 lines (Tournament Control)
+
+KEY COMPONENTS TO KEEP:
+
+From Dashboard Viewer:
+- Kill Feed Panel (left sidebar, real-time events)
+- Top 10 Leaderboard with K/D stats
+- Match Time Counter (MM:SS format)
+- 4 Stat Cards (Kills, Players, Teams, Time)
+- Excel Export button
+- Green color for alive status
+- 3-column grid layout concept
+- WebSocket connection pattern
+
+From Dashboard Tournament:
+- Tournament Grid (auto-fit columns)
+- Team Boxes with player indicators
+- Click-to-toggle player alive/dead
+- Curator Mode (manual override)
+- Phase 2 Auto-Protection (5s window)
+- Setup Modal (image + manual input)
+- Edit Modal (team management)
+- Server Detection Indicator
+- Notification Toast System
+- All 5 Control Buttons
+
+TO MERGE:
+- Connection Status (single unified badge)
+- WebSocket (one connection, all messages)
+- Status Bar (teams, alive, dead, kills)
+
+RECOMMENDED LAYOUT:
+- Left 400px: Kill Feed Panel
+- Center flexible: Status Bar + Tournament Grid
+- Right 400px: Leaderboard Panel
+- Top-right fixed: 4 Indicators (connection, curator, protection, server)
+
+IMPLEMENTATION PHASES:
+1. Foundation (HTML, CSS, WebSocket, State)
+2. Tournament Core (Grid, Boxes, Modals, Buttons)
+3. Curator & Protection (Mode, Filter, Indicator, Overrides)
+4. Analytics (Kill Feed, Stats, Leaderboard, Export)
+5. Polish (Colors, Typography, Toasts, Testing)
+
+WEBSOCKET EVENTS:
+From Viewer: kill, stats
+From Tournament: roster_loaded, player_status_updated, team_added, team_updated, team_removed, match_reset, roster_cleared, player_added, server_detected
+
+API ENDPOINTS:
+GET /export
+GET /api/tournament/roster
+POST /api/tournament/roster/upload
+POST /api/tournament/roster/manual
+PUT /api/tournament/team/{tag}
+POST /api/tournament/player/status
+POST /api/tournament/match/reset
+POST /api/tournament/roster/clear
+
+CURATOR MODE:
+- Blocks: player_added, kill, player_detected messages
+- Indicator: "MODO CURADOR ATIVO" (pink border, pulses)
+- Button toggles: "Ativar Modo Curador" <-> "Ativar Modo AI"
+
+AUTO-PROTECTION (Phase 2):
+- Window: 5000ms (5 seconds)
+- Tracks manual overrides in Map
+- Prevents server updates from overwriting manual edits
+- Recalculates team alive/dead counts
+- Shows indicator: "Proteção Automática: X edições ativas"
+
+DESIGN UNIFICATION:
+- Font: 'Inter', 'Segoe UI', sans-serif
+- Colors: #0e1015 (bg) | #10b981 (alive) | #e74c3c (dead) | #667eea (primary)
+- Animations: slideIn, pulse, fadeIn, revivePulse
+- Dark professional theme
+
+RESULT: Single comprehensive dashboard combining tournament control with real-time analytics, curator override capabilities, and automatic protection against conflicts.

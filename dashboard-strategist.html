@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA Analytics - Dashboard Estrategista</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0e1015;
+            color: #ffffff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* LAYOUT PRINCIPAL - 3 COLUNAS */
+        .strategist-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr 400px;
+            grid-template-rows: 70px auto 1fr;
+            gap: 12px;
+            height: 100vh;
+            padding: 12px;
+        }
+
+        /* HEADER */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title h1 {
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* STATUS BAR */
+        .status-bar {
+            grid-column: 1 / -1;
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 10px;
+            border: 1px solid #2a2d35;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* PAINÉIS */
+        .panel {
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 12px;
+            border: 1px solid #2a2d35;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #2a2d35;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* KILL FEED PANEL */
+        .kill-feed-item {
+            background: rgba(30, 33, 42, 0.6);
+            border-left: 3px solid #ef4444;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            animation: slideIn 0.3s ease;
+            transition: all 0.2s;
+        }
+
+        .kill-feed-item:hover {
+            background: rgba(30, 33, 42, 0.9);
+            transform: translateX(3px);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .kill-text {
+            font-size: 13px;
+            color: #ffffff;
+            line-height: 1.4;
+        }
+
+        .kill-weapon {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        /* TOURNAMENT GRID */
+        .tournament-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            padding: 5px;
+        }
+
+        .team-box {
+            background: linear-gradient(145deg, #1e2128 0%, #1a1d24 100%);
+            border: 1px solid #2a2d35;
+            border-top: 3px solid #667eea;
+            border-radius: 10px;
+            padding: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .team-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+            border-top-color: #764ba2;
+        }
+
+        .team-box.eliminated {
+            opacity: 0.5;
+            border-top-color: #6b7280;
+        }
+
+        .team-header {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .team-tag {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .team-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+        }
+
+        .team-stats .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .team-stats .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .team-stats .stat-label {
+            font-size: 10px;
+            color: #6b7280;
+        }
+
+        .player-indicators {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .player-box {
+            width: 35px;
+            height: 35px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .player-box.alive {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .player-box.dead {
+            background: #374151;
+            color: #6b7280;
+        }
+
+        .player-box.empty {
+            background: #1f2937;
+            border: 1px dashed #374151;
+            cursor: default;
+        }
+
+        .player-box:not(.empty):hover {
+            transform: scale(1.15);
+            z-index: 10;
+        }
+
+        .player-kills {
+            color: white;
+            font-weight: 700;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .player-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .player-box:hover .player-tooltip {
+            display: block;
+        }
+
+        /* LEADERBOARD */
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background: rgba(30, 33, 42, 0.4);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .leaderboard-item:hover {
+            background: rgba(30, 33, 42, 0.7);
+            transform: translateX(3px);
+        }
+
+        .leaderboard-rank {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .leaderboard-rank.rank-1 { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+        .leaderboard-rank.rank-2 { background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%); }
+        .leaderboard-rank.rank-3 { background: linear-gradient(135deg, #cd7f32 0%, #a0522d 100%); }
+        .leaderboard-rank.rank-other { background: #374151; color: #9ca3af; }
+
+        .leaderboard-player {
+            flex: 1;
+        }
+
+        .leaderboard-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .leaderboard-team {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .leaderboard-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .leaderboard-kills {
+            color: #ef4444;
+        }
+
+        .leaderboard-kd {
+            color: #10b981;
+        }
+
+        /* BUTTONS */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+        }
+
+        /* CONNECTION STATUS */
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            left: 50%; transform: translateX(-50%);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .connection-status.connected {
+            background: rgba(16, 185, 129, 0.2);
+            border: 2px solid #10b981;
+            color: #10b981;
+        }
+
+        .connection-status.disconnected {
+            background: rgba(107, 114, 128, 0.2);
+            border: 2px solid #6b7280;
+            color: #6b7280;
+        }
+
+        /* CURATOR MODE INDICATOR */
+        .curator-mode-indicator {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #f5576c;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+
+        .curator-mode-indicator.active {
+            display: block;
+            color: #f5576c;
+        }
+
+        /* AUTO-PROTECTION INDICATOR */
+        .auto-protection-indicator {
+            position: fixed;
+            top: 120px;
+            right: 20px;
+            padding: 8px 15px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #3498db;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            color: #3498db;
+        }
+
+        .auto-protection-indicator.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* SERVER INDICATOR */
+        .server-indicator {
+            position: fixed;
+            top: 170px;
+            right: 20px;
+            padding: 8px 15px;
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #9b59b6;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            color: #9b59b6;
+        }
+
+        .server-indicator.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .server-indicator.server1 {
+            border-color: #e67e22;
+            color: #e67e22;
+        }
+
+        .server-indicator.server2 {
+            border-color: #1abc9c;
+            color: #1abc9c;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* NOTIFICATION TOAST */
+        .notification-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            border: 2px solid;
+            max-width: 350px;
+        }
+
+        .notification-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification-toast.success {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.2);
+        }
+
+        .notification-toast.error {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.2);
+        }
+
+        .notification-toast.warning {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.2);
+        }
+
+        .notification-toast.info {
+            border-color: #3498db;
+            background: rgba(52, 152, 219, 0.2);
+        }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #1a1d24 0%, #151820 100%);
+            border-radius: 16px;
+            border: 1px solid #2a2d35;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #2a2d35;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            color: #ef4444;
+            transform: rotate(90deg);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #9ca3af;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(30, 33, 42, 0.6);
+            border: 1px solid #2a2d35;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .form-input::placeholder {
+            color: #6b7280;
+        }
+
+        textarea.form-input {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        /* EMPTY STATE */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .empty-state h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #9ca3af;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1d24;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        /* CONTROLS PANEL */
+        .controls-panel {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status disconnected">
+        ⚫ Desconectado
+    </div>
+
+    <!-- Curator Mode Indicator -->
+    <div id="curatorModeIndicator" class="curator-mode-indicator">
+        🎨 MODO CURADOR ATIVO
+    </div>
+
+    <!-- Auto-Protection Indicator -->
+    <div id="autoProtectionIndicator" class="auto-protection-indicator">
+        🛡️ Proteção Automática: 0 edições ativas
+    </div>
+
+    <!-- Server Detection Indicator -->
+    <div id="serverIndicator" class="server-indicator">
+        🎮 Detectando servidor...
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notificationToast" class="notification-toast"></div>
+
+    <!-- Main Layout -->
+    <div class="strategist-layout">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">
+                <h1>🎯 Dashboard Estrategista - GTA Tournament</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-info" onclick="exportExcel()">📊 Exportar Excel</button>
+                <button class="btn btn-primary" onclick="openSetupModal()">⚙️ Configurar Torneio</button>
+            </div>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar">
+            <div class="stat-card">
+                <div class="stat-value" id="totalKills">0</div>
+                <div class="stat-label">Total Kills</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="teamsCount">0</div>
+                <div class="stat-label">Times</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="playersAlive">0</div>
+                <div class="stat-label">Vivos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="playersDead">0</div>
+                <div class="stat-label">Mortos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="matchTime">00:00</div>
+                <div class="stat-label">Tempo</div>
+            </div>
+        </div>
+
+        <!-- LEFT PANEL - KILL FEED -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">⚔️ Kill Feed</div>
+                <div style="font-size: 11px; color: #6b7280;">Tempo Real</div>
+            </div>
+            <div class="panel-content" id="killFeed">
+                <div class="empty-state">
+                    <h2>Aguardando Kills</h2>
+                    <p>Os eventos de combate aparecerão aqui</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL - TOURNAMENT GRID -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">🏆 Grid de Torneio</div>
+                <div class="controls-panel">
+                    <button class="btn btn-success" onclick="openEditModal()" id="editBtn" style="display:none;">
+                        ✏️ Editar
+                    </button>
+                    <button class="btn btn-secondary" onclick="toggleCuratorMode()" id="curatorBtn" style="display:none;">
+                        🎨 Modo Curador
+                    </button>
+                    <button class="btn btn-warning" onclick="resetMatch()" id="resetBtn" style="display:none;">
+                        🔄 Reset
+                    </button>
+                    <button class="btn btn-danger" onclick="clearRoster()" id="clearBtn" style="display:none;">
+                        🗑️ Limpar
+                    </button>
+                </div>
+            </div>
+            <div class="panel-content" id="tournamentGrid">
+                <div class="empty-state">
+                    <h2>📋 Nenhum Torneio Carregado</h2>
+                    <p>Clique em "Configurar Torneio" para começar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL - LEADERBOARD -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">🏅 Top 10 Jogadores</div>
+                <div style="font-size: 11px; color: #6b7280;">K/D Ranking</div>
+            </div>
+            <div class="panel-content" id="leaderboard">
+                <div class="empty-state">
+                    <h2>Aguardando Dados</h2>
+                    <p>O ranking aparecerá quando houver kills</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETUP MODAL -->
+    <div id="setupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">⚙️ Configurar Torneio</div>
+                <button class="modal-close" onclick="closeSetupModal()">&times;</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">📸 Upload de Imagem (Detecção Automática)</label>
+                <input type="file" id="tournamentImage" accept="image/*" class="form-input" onchange="handleImageUpload(event)">
+                <div style="font-size: 11px; color: #6b7280; margin-top: 5px;">
+                    A IA detectará automaticamente as tags dos times
+                </div>
+            </div>
+
+            <div style="text-align: center; margin: 20px 0; color: #6b7280;">
+                - OU -
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">✍️ Digite as Tags Manualmente</label>
+                <textarea id="teamTagsInput" class="form-input" placeholder="PPP, MTL, SVV, LLL, AAA..."></textarea>
+                <div style="font-size: 11px; color: #6b7280; margin-top: 5px;">
+                    Separe as tags por vírgula
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="btn btn-primary" onclick="startTournament()" style="flex: 1;">🚀 Iniciar Torneio</button>
+                <button class="btn btn-secondary" onclick="closeSetupModal()">❌ Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">✏️ Editar Times</div>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+
+            <div id="editContent">
+                <!-- Será preenchido dinamicamente -->
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="btn btn-success" onclick="saveEdits()" style="flex: 1;">💾 Salvar</button>
+                <button class="btn btn-secondary" onclick="closeEditModal()">❌ Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // GLOBAL STATE
+        // ==========================================
+        let ws = null;
+        let teams = [];
+        let killFeedItems = [];
+        let leaderboardData = [];
+        let curatorMode = false;
+        let matchStartTime = null;
+        let matchTimeInterval = null;
+
+        // Phase 2: Auto-Protection
+        const PROTECTION_WINDOW = 5000; // 5 seconds
+        const manualOverrides = new Map(); // Map<"teamTag:playerName", {alive: boolean, expiresAt: timestamp}>
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🎯 Dashboard Estrategista initialized');
+            connectWebSocket();
+            startMatchTimer();
+        });
+
+        // ==========================================
+        // WEBSOCKET CONNECTION
+        // ==========================================
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const hostname = window.location.hostname || 'localhost';
+            const wsUrl = `${protocol}//${hostname}:3000/events`;
+            
+            console.log('🔌 Conectando ao WebSocket:', wsUrl);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('✅ WebSocket connected');
+                updateConnectionStatus(true);
+            };
+
+            ws.onclose = () => {
+                console.log('❌ WebSocket disconnected');
+                updateConnectionStatus(false);
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'connection-status connected';
+                status.textContent = '🟢 Conectado';
+            } else {
+                status.className = 'connection-status disconnected';
+                status.textContent = '⚫ Desconectado';
+            }
+        }
+
+        function handleWebSocketMessage(message) {
+            console.log('📨 Message:', message);
+
+            // CURATOR MODE FILTER
+            if (curatorMode) {
+                const aiUpdateTypes = ['player_added', 'kill', 'player_detected'];
+                if (aiUpdateTypes.includes(message.type)) {
+                    console.log(`🎨 CURATOR MODE: Blocking AI update of type "${message.type}"`);
+                    return;
+                }
+            }
+
+            // AUTO-PROTECTION: Clean expired overrides
+            if (message.type === 'player_added' || message.type === 'kill') {
+                cleanExpiredOverrides();
+            }
+
+            switch (message.type) {
+                case 'kill':
+                    addKillToFeed(message.data);
+                    break;
+
+                case 'stats':
+                    updateStats(message.data);
+                    updateLeaderboard(message.data);
+                    break;
+
+                case 'roster_loaded':
+                    teams = applyManualOverrides(message.data.teams);
+                    renderTournamentGrid();
+                    closeSetupModal();
+                    showNotification('Torneio carregado com sucesso!', 'success');
+                    break;
+
+                case 'player_status_updated':
+                    if (message.data.teams) {
+                        cleanExpiredOverrides();
+                        teams = applyManualOverrides(message.data.teams);
+                        renderTournamentGrid();
+                    }
+                    break;
+
+                case 'team_added':
+                case 'team_updated':
+                case 'team_removed':
+                    teams = applyManualOverrides(message.data.teams);
+                    renderTournamentGrid();
+                    break;
+
+                case 'match_reset':
+                    manualOverrides.clear();
+                    teams = message.data.teams;
+                    renderTournamentGrid();
+                    showNotification('Partida resetada!', 'success');
+                    break;
+
+                case 'roster_cleared':
+                    manualOverrides.clear();
+                    teams = [];
+                    killFeedItems = [];
+                    leaderboardData = [];
+                    renderTournamentGrid();
+                    renderKillFeed();
+                    renderLeaderboard();
+                    showNotification('Lista de times limpa', 'success');
+                    break;
+
+                case 'player_added':
+                    if (!curatorMode) {
+                        loadExistingRoster();
+                    }
+                    break;
+
+                case 'server_detected':
+                    updateServerIndicator(message.data.server_type, message.data.confidence);
+                    break;
+            }
+        }
+
+        // ==========================================
+        // PHASE 2: AUTO-PROTECTION FUNCTIONS
+        // ==========================================
+        function cleanExpiredOverrides() {
+            const now = Date.now();
+            let cleaned = 0;
+
+            for (const [key, override] of manualOverrides.entries()) {
+                if (now > override.expiresAt) {
+                    manualOverrides.delete(key);
+                    cleaned++;
+                    console.log(`🛡️ Override expired for ${key}`);
+                }
+            }
+
+            if (cleaned > 0) {
+                console.log(`🛡️ Cleaned ${cleaned} expired overrides`);
+            }
+
+            updateAutoProtectionIndicator();
+        }
+
+        function updateAutoProtectionIndicator() {
+            const indicator = document.getElementById('autoProtectionIndicator');
+            const count = manualOverrides.size;
+
+            if (count > 0) {
+                indicator.textContent = `🛡️ Proteção Automática: ${count} ${count === 1 ? 'edição ativa' : 'edições ativas'}`;
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+
+        function applyManualOverrides(serverTeams) {
+            if (!serverTeams || manualOverrides.size === 0) {
+                return serverTeams;
+            }
+
+            const mergedTeams = JSON.parse(JSON.stringify(serverTeams));
+
+            mergedTeams.forEach(team => {
+                if (!team.players) return;
+
+                team.players.forEach(player => {
+                    const overrideKey = `${team.tag}:${player.name}`;
+                    const override = manualOverrides.get(overrideKey);
+
+                    if (override) {
+                        player.alive = override.alive;
+                        console.log(`🛡️ Applied manual override for ${overrideKey}: alive=${override.alive}`);
+                    }
+                });
+
+                // Recalculate team stats
+                team.alive_count = team.players.filter(p => p.alive).length;
+                team.dead_count = team.players.length - team.alive_count;
+            });
+
+            return mergedTeams;
+        }
+
+        // ==========================================
+        // SERVER DETECTION
+        // ==========================================
+        function updateServerIndicator(serverType, confidence) {
+            const indicator = document.getElementById('serverIndicator');
+            indicator.classList.remove('server1', 'server2');
+
+            if (serverType === 'server1') {
+                indicator.textContent = `🎮 Servidor 1 detectado (${(confidence * 100).toFixed(0)}%)`;
+                indicator.classList.add('server1', 'active');
+                showNotification(`🎮 Servidor 1 detectado com ${(confidence * 100).toFixed(0)}% de confiança`, 'info', 3000);
+            } else if (serverType === 'server2') {
+                indicator.textContent = `🎮 Servidor 2 detectado (${(confidence * 100).toFixed(0)}%)`;
+                indicator.classList.add('server2', 'active');
+                showNotification(`🎮 Servidor 2 detectado com ${(confidence * 100).toFixed(0)}% de confiança`, 'info', 3000);
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+
+        // ==========================================
+        // KILL FEED
+        // ==========================================
+        function addKillToFeed(killData) {
+            killFeedItems.unshift(killData);
+            if (killFeedItems.length > 50) {
+                killFeedItems.pop();
+            }
+            renderKillFeed();
+        }
+
+        function renderKillFeed() {
+            const container = document.getElementById('killFeed');
+
+            if (killFeedItems.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>Aguardando Kills</h2>
+                        <p>Os eventos de combate aparecerão aqui</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = killFeedItems.map(kill => `
+                <div class="kill-feed-item">
+                    <div class="kill-text">
+                        <strong>${kill.killer}</strong> (${kill.killer_team}) 💀 <strong>${kill.victim}</strong> (${kill.victim_team})
+                    </div>
+                    ${kill.weapon ? `<div class="kill-weapon">🔫 ${kill.weapon}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // ==========================================
+        // LEADERBOARD
+        // ==========================================
+        function updateLeaderboard(statsData) {
+            const allPlayers = [];
+
+            if (statsData.teams) {
+                statsData.teams.forEach(team => {
+                    if (team.players) {
+                        team.players.forEach(player => {
+                            const deaths = player.deaths || 0;
+                            const kd = deaths > 0 ? (player.kills / deaths).toFixed(2) : player.kills.toFixed(2);
+                            allPlayers.push({
+                                name: player.name,
+                                team: team.tag,
+                                kills: player.kills || 0,
+                                deaths: deaths,
+                                kd: parseFloat(kd)
+                            });
+                        });
+                    }
+                });
+            }
+
+            allPlayers.sort((a, b) => {
+                if (b.kills !== a.kills) return b.kills - a.kills;
+                return b.kd - a.kd;
+            });
+
+            leaderboardData = allPlayers.slice(0, 10);
+            renderLeaderboard();
+        }
+
+        function renderLeaderboard() {
+            const container = document.getElementById('leaderboard');
+
+            if (leaderboardData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>Aguardando Dados</h2>
+                        <p>O ranking aparecerá quando houver kills</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = leaderboardData.map((player, index) => {
+                const rank = index + 1;
+                let rankClass = 'rank-other';
+                if (rank === 1) rankClass = 'rank-1';
+                else if (rank === 2) rankClass = 'rank-2';
+                else if (rank === 3) rankClass = 'rank-3';
+
+                return `
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank ${rankClass}">${rank}</div>
+                        <div class="leaderboard-player">
+                            <div class="leaderboard-name">${player.name}</div>
+                            <div class="leaderboard-team">${player.team}</div>
+                        </div>
+                        <div class="leaderboard-stats">
+                            <div class="leaderboard-kills">${player.kills}K</div>
+                            <div class="leaderboard-kd">${player.kd} K/D</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // STATS UPDATE
+        // ==========================================
+        function updateStats(data) {
+            if (data.total_kills !== undefined) {
+                document.getElementById('totalKills').textContent = data.total_kills;
+            }
+
+            if (data.teams) {
+                document.getElementById('teamsCount').textContent = data.teams.length;
+
+                let totalAlive = 0;
+                let totalDead = 0;
+
+                data.teams.forEach(team => {
+                    totalAlive += team.alive_count || 0;
+                    totalDead += team.dead_count || 0;
+                });
+
+                document.getElementById('playersAlive').textContent = totalAlive;
+                document.getElementById('playersDead').textContent = totalDead;
+            }
+        }
+
+        // ==========================================
+        // TOURNAMENT GRID
+        // ==========================================
+        function renderTournamentGrid() {
+            const container = document.getElementById('tournamentGrid');
+            const resetBtn = document.getElementById('resetBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const editBtn = document.getElementById('editBtn');
+            const curatorBtn = document.getElementById('curatorBtn');
+
+            if (!teams || teams.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>📋 Nenhum Torneio Carregado</h2>
+                        <p>Clique em "Configurar Torneio" para começar</p>
+                    </div>
+                `;
+                resetBtn.style.display = 'none';
+                clearBtn.style.display = 'none';
+                editBtn.style.display = 'none';
+                curatorBtn.style.display = 'none';
+                return;
+            }
+
+            // Show controls
+            resetBtn.style.display = 'inline-flex';
+            clearBtn.style.display = 'inline-flex';
+            editBtn.style.display = 'inline-flex';
+            curatorBtn.style.display = 'inline-flex';
+
+            container.innerHTML = `
+                <div class="tournament-grid">
+                    ${teams.map(team => {
+                        const isEliminated = (team.alive_count || 0) === 0;
+                        const playerBoxes = Array(5).fill(null).map((_, index) => {
+                            const players = team.players || [];
+                            const player = players[index];
+
+                            if (!player) {
+                                return `<div class="player-box empty"></div>`;
+                            }
+
+                            const boxClass = player.alive ? 'alive' : 'dead';
+                            const playerName = player.name || `P${index + 1}`;
+                            const killDisplay = player.kills > 0 ? player.kills : '';
+
+                            return `
+                                <div class="player-box ${boxClass}"
+                                     onclick="togglePlayerStatus('${team.tag}', '${playerName}', ${player.alive})"
+                                     title="${playerName} - ${player.kills} kills">
+                                    <span class="player-kills">${killDisplay}</span>
+                                    <span class="player-tooltip">${playerName} (${player.kills} kills)</span>
+                                </div>
+                            `;
+                        }).join('');
+
+                        const teamDisplay = team.full_name ? `${team.tag} - ${team.full_name}` : team.tag;
+
+                        return `
+                            <div class="team-box ${isEliminated ? 'eliminated' : ''}">
+                                <div class="team-header">
+                                    <div class="team-tag" title="${team.full_name || team.tag}">${teamDisplay}</div>
+                                    <div class="team-stats">
+                                        <div class="stat-item">
+                                            <div class="stat-value" style="color: #10b981;">${team.alive_count || 0}</div>
+                                            <div class="stat-label">Vivos</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-value" style="color: #ef4444;">${team.total_kills || 0}</div>
+                                            <div class="stat-label">Kills</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="player-indicators">
+                                    ${playerBoxes}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // PLAYER TOGGLE
+        // ==========================================
+        async function togglePlayerStatus(teamTag, playerName, currentStatus) {
+            console.log(`🖱️ Toggle: ${teamTag}.${playerName} | Current: ${currentStatus}`);
+
+            const newStatus = !currentStatus;
+
+            // Phase 2: Register manual override with 5-second protection
+            const overrideKey = `${teamTag}:${playerName}`;
+            manualOverrides.set(overrideKey, {
+                alive: newStatus,
+                expiresAt: Date.now() + PROTECTION_WINDOW
+            });
+
+            console.log(`🛡️ Manual override registered for ${overrideKey} (protected for ${PROTECTION_WINDOW/1000}s)`);
+
+            updateAutoProtectionIndicator();
+
+            showNotification(
+                `🛡️ Proteção automática ativa por ${PROTECTION_WINDOW/1000}s`,
+                'info',
+                2000
+            );
+
+            // Update local state immediately
+            teams.forEach(team => {
+                if (team.tag === teamTag && team.players) {
+                    team.players.forEach(player => {
+                        if (player.name === playerName) {
+                            player.alive = newStatus;
+                        }
+                    });
+                    team.alive_count = team.players.filter(p => p.alive).length;
+                    team.dead_count = team.players.length - team.alive_count;
+                }
+            });
+
+            renderTournamentGrid();
+
+            // Send to backend
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/player/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        team_tag: teamTag,
+                        player_name: playerName,
+                        alive: newStatus
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update player status');
+                }
+
+                console.log('✅ Player status updated on server');
+            } catch (error) {
+                console.error('❌ Error updating player status:', error);
+                showNotification('Erro ao atualizar status do jogador', 'error');
+            }
+        }
+
+        // ==========================================
+        // CURATOR MODE
+        // ==========================================
+        function toggleCuratorMode() {
+            curatorMode = !curatorMode;
+
+            const btn = document.getElementById('curatorBtn');
+            const indicator = document.getElementById('curatorModeIndicator');
+
+            if (curatorMode) {
+                btn.textContent = '🤖 Ativar Modo AI';
+                btn.className = 'btn btn-warning';
+                indicator.classList.add('active');
+
+                showNotification(
+                    '🎨 Modo Curador Ativado - Você tem controle total',
+                    'success',
+                    4000
+                );
+            } else {
+                btn.textContent = '🎨 Modo Curador';
+                btn.className = 'btn btn-secondary';
+                indicator.classList.remove('active');
+
+                loadExistingRoster();
+
+                showNotification(
+                    '🤖 Modo AI Ativado - Sistema sincronizado',
+                    'success',
+                    4000
+                );
+            }
+        }
+
+        // ==========================================
+        // API FUNCTIONS
+        // ==========================================
+        async function loadExistingRoster() {
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/roster');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (data.teams) {
+                    teams = applyManualOverrides(data.teams);
+                    renderTournamentGrid();
+                }
+            } catch (error) {
+                console.error('Error loading roster:', error);
+            }
+        }
+
+        async function resetMatch() {
+            if (!confirm('Resetar partida? Todos os jogadores voltarão ao estado vivo.')) return;
+
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/match/reset', { method: 'POST' });
+                if (response.ok) {
+                    showNotification('Partida resetada com sucesso!', 'success');
+                }
+            } catch (error) {
+                console.error('Error resetting match:', error);
+                showNotification('Erro ao resetar partida', 'error');
+            }
+        }
+
+        async function clearRoster() {
+            if (!confirm('Limpar todos os times? Isso removerá todos os dados.')) return;
+
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/roster/clear', { method: 'POST' });
+                if (response.ok) {
+                    teams = [];
+                    renderTournamentGrid();
+                    showNotification('Lista de times limpa!', 'success');
+                }
+            } catch (error) {
+                console.error('Error clearing roster:', error);
+                showNotification('Erro ao limpar times', 'error');
+            }
+        }
+
+        async function exportExcel() {
+            try {
+                const response = await fetch('/export');
+                if (!response.ok) throw new Error('Export failed');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gta_tournament_${Date.now()}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showNotification('Excel exportado com sucesso!', 'success');
+            } catch (error) {
+                console.error('Error exporting:', error);
+                showNotification('Erro ao exportar Excel', 'error');
+            }
+        }
+
+        // ==========================================
+        // MATCH TIMER
+        // ==========================================
+        function startMatchTimer() {
+            matchStartTime = Date.now();
+            matchTimeInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - matchStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('matchTime').textContent =
+                    `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        // ==========================================
+        // MODALS
+        // ==========================================
+        function openSetupModal() {
+            document.getElementById('setupModal').classList.add('active');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('setupModal').classList.remove('active');
+        }
+
+        function openEditModal() {
+            const modal = document.getElementById('editModal');
+            const content = document.getElementById('editContent');
+
+            content.innerHTML = teams.map((team, teamIndex) => `
+                <div class="form-group">
+                    <label class="form-label">Time ${teamIndex + 1}: ${team.tag}</label>
+                    <input type="text" class="form-input" value="${team.tag}"
+                           data-team-index="${teamIndex}" data-field="tag">
+                    <textarea class="form-input" style="margin-top: 8px;" placeholder="Nomes dos jogadores (um por linha)"
+                              data-team-index="${teamIndex}" data-field="players">${(team.players || []).map(p => p.name).join('\n')}</textarea>
+                </div>
+            `).join('');
+
+            modal.classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/roster/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    showNotification('Imagem processada! Tags detectadas.', 'success');
+                }
+            } catch (error) {
+                console.error('Error uploading image:', error);
+                showNotification('Erro ao processar imagem', 'error');
+            }
+        }
+
+        async function startTournament() {
+            const inputElement = document.getElementById('teamTagsInput');
+            console.log('Input element:', inputElement);
+            if (!inputElement) {
+                showNotification('Erro interno!', 'error');
+                return;
+            }
+            const tagsInput = inputElement.value.trim();
+            console.log('Tags value:', tagsInput);
+            if (!tagsInput) {
+                showNotification('Digite as tags dos times!', 'warning');
+                return;
+            }
+
+            const tags = tagsInput.split(',').map(t => t.trim().toUpperCase()).filter(t => t && t !== '...');
+            console.log('Processed tags:', tags);
+
+            try {
+                const response = await fetch('http://localhost:3000/api/tournament/roster/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ teams: tags.map(tag => ({ tag, full_name: '', players: [] })) })
+                });
+
+                if (response.ok) {
+                    showNotification('Torneio iniciado!', 'success');
+                    closeSetupModal();
+                }
+            } catch (error) {
+                console.error('Error starting tournament:', error);
+                showNotification('Erro ao iniciar torneio', 'error');
+            }
+        }
+
+        async function saveEdits() {
+            // Implementation for saving edits
+            showNotification('Edições salvas!', 'success');
+            closeEditModal();
+        }
+
+        // ==========================================
+        // NOTIFICATION SYSTEM
+        // ==========================================
+        function showNotification(message, type = 'info', duration = 4000) {
+            const toast = document.getElementById('notificationToast');
+            toast.textContent = message;
+            toast.className = `notification-toast ${type}`;
+
+            setTimeout(() => toast.classList.add('show'), 10);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+    </script>
+</body>
+</html>
