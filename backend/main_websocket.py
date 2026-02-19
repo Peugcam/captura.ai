@@ -355,6 +355,15 @@ class GTAAnalyticsBackend:
             logger.info(f"Alive: {stats['alive']} | Dead: {stats['dead']}")
             logger.info("="*60)
 
+    async def periodic_flush_timer(self):
+        """
+        Timer independente que verifica frames pendentes a cada 0.3s
+        CRÍTICO: Garante processamento mesmo quando captura para
+        """
+        while True:
+            await asyncio.sleep(0.3)  # Verificar 3x por segundo
+            await self.check_pending_flush()
+
     async def run_poller(self):
         """Run frame polling with periodic flush check"""
         await self.poller.start_polling(
@@ -424,6 +433,7 @@ async def startup_event():
     # Start background tasks
     asyncio.create_task(backend.stats_reporter())
     asyncio.create_task(backend.run_poller())
+    asyncio.create_task(backend.periodic_flush_timer())  # Timer independente para auto-flush
 
 
 @app.get("/")
@@ -457,10 +467,55 @@ async def serve_player_dashboard():
 
 @app.get("/viewer")
 async def serve_viewer_dashboard():
-    """Serve dashboard completo para o estrategista"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-viewer.html")
+    """Serve dashboard COMPLETO do estrategista V2 - com edição e gerenciamento total"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-strategist-v2.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard do estrategista V2 não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/monitor")
+async def serve_monitor_dashboard():
+    """Serve dashboard de monitoramento em tempo real"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-monitor.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard de monitoramento não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/strategist")
+async def serve_strategist_dashboard():
+    """Serve dashboard completo do estrategista V2 - com edição e gerenciamento"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-strategist-v2.html")
     if not os.path.exists(dashboard_path):
         raise HTTPException(status_code=404, detail="Dashboard do estrategista não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/")
+async def serve_main_dashboard():
+    """Serve dashboard principal OBS"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-obs.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard principal não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/obs")
+async def serve_obs_dashboard():
+    """Serve dashboard OBS - Battle Royale Analytics"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-obs.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard OBS não encontrado")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/v2")
+async def serve_v2_dashboard():
+    """Serve dashboard V2 - Battle Royale Analytics V2"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-v2.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(status_code=404, detail="Dashboard V2 não encontrado")
     return FileResponse(dashboard_path, media_type="text/html")
 
 
@@ -800,9 +855,11 @@ async def update_player_status(status: PlayerStatusUpdate):
 
     team = roster_manager.get_team(status.team_tag)
     if not team:
+        logger.warning(f"❌ Team not found: '{status.team_tag}' (available: {list(roster_manager.teams.keys())})")
         raise HTTPException(status_code=404, detail=f"Team {status.team_tag} not found")
 
     if status.player_name not in team.players:
+        logger.warning(f"❌ Player not found: '{status.player_name}' in team '{status.team_tag}' (available: {list(team.players.keys())})")
         raise HTTPException(status_code=404, detail=f"Player {status.player_name} not found in team {status.team_tag}")
 
     # Update player status
@@ -932,10 +989,10 @@ async def finish_tournament(winner_tag: str = None):
     return {"success": True, "message": "Tournament finished and saved to history"}
 
 
-@app.get("/api/tournament")
+@app.get("/tournament")
 async def serve_tournament_dashboard():
-    """Serve tournament dashboard"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-tournament.html")
+    """Serve tournament dashboard - permite editar rosters e gerenciar times"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard-tournament.html")
     if not os.path.exists(dashboard_path):
         raise HTTPException(status_code=404, detail="Tournament dashboard not found")
     return FileResponse(dashboard_path, media_type="text/html")
@@ -1051,6 +1108,26 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
 
                 logger.debug(f"📨 Received from client: {data[:100]}")
+
+                # Parse and broadcast message to all connected clients
+                try:
+                    msg_data = json.loads(data)
+
+                    # If it's a kill event, broadcast to all clients
+                    if msg_data.get('type') == 'kill':
+                        kill_data = msg_data.get('data', {})
+                        logger.info(f"💀 Kill event: {kill_data.get('killer')} → {kill_data.get('victim')} ({kill_data.get('kill_type')})")
+
+                        # Broadcast to all connected dashboards
+                        await manager.broadcast({
+                            "type": "kill",
+                            "data": kill_data
+                        })
+
+                except json.JSONDecodeError:
+                    logger.warning(f"⚠️  Invalid JSON received from client")
+                except Exception as e:
+                    logger.error(f"❌ Error processing message: {e}")
 
             except asyncio.TimeoutError:
                 # Timeout normal, continua esperando
