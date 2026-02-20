@@ -85,8 +85,11 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8000")
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "1.0"))  # segundos
 FRAMES_BATCH_SIZE = int(os.getenv("FRAMES_BATCH_SIZE", "10"))
 
-# OCR Pre-Filter
-OCR_ENABLED = os.getenv("OCR_ENABLED", "true").lower() == "true"
+# Pixel Filter (FREE pre-filter, ~5ms per frame, 80-90% filter rate)
+PIXEL_FILTER_ENABLED = os.getenv("PIXEL_FILTER_ENABLED", "true").lower() == "true"
+
+# OCR Pre-Filter (LEGACY - replaced by PixelFilter)
+OCR_ENABLED = os.getenv("OCR_ENABLED", "false").lower() == "true"
 OCR_WORKERS = int(os.getenv("OCR_WORKERS", "4"))
 # Game Type (para otimizar prompts e ROI)
 GAME_TYPE = os.getenv("GAME_TYPE", "gta").lower()  # gta ou naruto
@@ -139,7 +142,8 @@ if not API_KEYS:
         "See backend/.env.example for details."
     )
 
-VISION_MODEL = os.getenv("VISION_MODEL", "openai/gpt-4o")
+# Vision Model - Gemini Flash 2.0 (90% cheaper, 2-3x faster than GPT-4o)
+VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-flash-1.5-8b")
 BATCH_SIZE_QUICK = int(os.getenv("BATCH_SIZE_QUICK", "10"))  # Processar 10 frames por vez
 BATCH_SIZE_DEEP = int(os.getenv("BATCH_SIZE_DEEP", "15"))
 QUICK_BATCH_INTERVAL = float(os.getenv("QUICK_BATCH_INTERVAL", "2.0"))  # Processar a cada 2 segundos

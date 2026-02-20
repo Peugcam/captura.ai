@@ -815,6 +815,13 @@ class FrameProcessor:
             )
             logger.info(f"🔄 Frame Deduplication enabled (threshold: {config.FRAME_SIMILARITY_THRESHOLD:.0%})")
 
+        # Pixel Filter (FREE pre-filter based on image analysis)
+        self.pixel_filter = None
+        if config.PIXEL_FILTER_ENABLED:
+            from src.pixel_filter import PixelFilter
+            self.pixel_filter = PixelFilter()
+            logger.info("🎨 Pixel Filter enabled (FREE, ~5ms, 80-90% filter rate)")
+
         # Usar Vision Pre-Filter (mais confiável que OCR)
         self.vision_filter = None
         if config.OCR_ENABLED:
@@ -824,7 +831,7 @@ class FrameProcessor:
                 model=config.VISION_MODEL
             )
         else:
-            logger.info("⚠️ Vision Pre-Filter disabled - all frames will be processed")
+            logger.info("⚠️ Vision Pre-Filter disabled - processing frames that pass Pixel Filter")
 
         self.vision = VisionProcessor(
             api_keys=config.API_KEYS,
@@ -945,7 +952,17 @@ class FrameProcessor:
             self.frames_filtered += 1
             return None
 
-        # Vision Pre-Filter (baixa resolução)
+        # Pixel Filter (FREE - 80-90% filter rate, ~5ms)
+        if self.pixel_filter:
+            has_visual_indicators = self.pixel_filter.has_kill_feed(frame_data)
+            if not has_visual_indicators:
+                logger.debug(f"🎨 Pixel Filter: Frame #{self.frames_received} NO visual indicators (filtered)")
+                self.frames_filtered += 1
+                return None
+            else:
+                logger.debug(f"🎨 Pixel Filter: Frame #{self.frames_received} HAS visual indicators (passed)")
+
+        # Vision Pre-Filter (baixa resolução - API paga)
         if self.vision_filter and config.OCR_ENABLED:
             has_kill_feed = self.vision_filter.has_kill_feed(frame_data)
             if has_kill_feed:
