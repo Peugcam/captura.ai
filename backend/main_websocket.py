@@ -1038,12 +1038,20 @@ async def upload_frame(file: UploadFile = File(...)):
             "data": image_base64
         }
 
-        # Process frame directly
-        await backend.processor.process_frames([frame_data])
+        # Process frame directly (singular method)
+        kills = await backend.processor.process_frame(frame_data)
+
+        # Broadcast kills if detected
+        if kills:
+            await backend.broadcast_kills(kills)
 
         logger.info(f"📸 Frame uploaded directly from client ({len(image_data)} bytes)")
 
-        return {"success": True, "message": "Frame uploaded successfully"}
+        return {
+            "success": True,
+            "message": "Frame uploaded successfully",
+            "kills_detected": len(kills) if kills else 0
+        }
 
     except Exception as e:
         logger.error(f"❌ Error processing uploaded frame: {e}")

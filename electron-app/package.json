@@ -1,0 +1,87 @@
+{
+  "name": "gta-analytics",
+  "version": "1.0.0",
+  "description": "GTA V Battle Royale Analytics - Real-time tracking",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --x64 --dir",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "GTA V",
+    "Analytics",
+    "Battle Royale",
+    "Esports"
+  ],
+  "author": "Paulo Eugenio Campos",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
+  },
+  "build": {
+    "appId": "com.gtaanalytics.app",
+    "productName": "GTA Analytics",
+    "copyright": "Copyright © 2026 Paulo Eugenio Campos",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "requestedExecutionLevel": "asInvoker",
+      "signingHashAlgorithms": ["sha256"],
+      "verifyUpdateCodeSignature": false,
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GTA Analytics",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "allowElevation": true
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.${ext}"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "python/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "python/dist",
+        "to": "python",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    }
+  }
+}

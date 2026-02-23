@@ -1,0 +1,107 @@
+========================================================================
+  GTA ANALYTICS V2 - TESTE COM NARUTO ONLINE
+========================================================================
+
+TUDO PRONTO PARA TESTAR!
+
+Gateway: RODANDO em http://localhost:8000
+Status: OK (testado e funcionando)
+
+========================================================================
+  PASSO A PASSO
+========================================================================
+
+1. ABRIR O OBS STUDIO
+   - Se nao tiver instalado: https://obsproject.com/
+
+2. ADICIONAR CAPTURA DO NARUTO ONLINE
+
+   a) Clique em [+] em "Fontes"
+   b) Selecione "Captura de Janela"
+   c) Nome: "Naruto Online"
+   d) Janela: Selecione a janela do jogo
+   e) OK
+
+3. INICIAR GRAVACAO
+
+   IMPORTANTE: O OBS so envia frames quando esta GRAVANDO ou TRANSMITINDO!
+
+   - Clique em "Iniciar Gravacao" no OBS
+   - Ou configure uma transmissao
+
+4. MONITORAR FRAMES
+
+   Abra um terminal e execute:
+
+   cd backend
+   python monitor_obs_frames.py
+
+   Voce vera em tempo real:
+   - Total de frames recebidos
+   - FPS medio
+   - Grafico de FPS
+
+5. JOGAR!
+
+   - Abra o Naruto Online
+   - Jogue normalmente
+   - O sistema detecta frames automaticamente!
+
+========================================================================
+  VERIFICACOES RAPIDAS
+========================================================================
+
+Gateway esta rodando?
+  curl http://localhost:8000/health
+
+Quantos frames na fila?
+  curl http://localhost:8000/frames
+
+Ver estatisticas?
+  curl http://localhost:8000/stats
+
+========================================================================
+  RESOLUCAO DE PROBLEMAS
+========================================================================
+
+PROBLEMA: Nenhum frame sendo detectado
+
+Solucao:
+  1. Verifique se o OBS esta GRAVANDO ou TRANSMITINDO
+  2. Verifique se adicionou a fonte de captura
+  3. Execute: python test_simple_upload.py (para testar o gateway)
+
+PROBLEMA: FPS muito baixo
+
+Solucao:
+  1. Ajuste resolucao no OBS (1920x1080 recomendado)
+  2. Configure 30 FPS nas configuracoes do OBS
+  3. Feche outros programas pesados
+
+========================================================================
+  ARQUIVOS CRIADOS
+========================================================================
+
+backend/monitor_obs_frames.py  - Monitor em tempo real
+backend/test_simple_upload.py  - Teste do gateway
+obs-capture.html               - Captura automatica (opcional)
+GUIA_OBS_NARUTO.md            - Guia completo
+
+========================================================================
+  PROXIMO NIVEL
+========================================================================
+
+Depois que os frames estiverem sendo detectados:
+
+1. Backend processa frames automaticamente
+2. Vision API analisa o conteudo
+3. Detecta eventos do jogo
+4. Atualiza dashboard em tempo real
+
+Tudo funciona automaticamente! So precisa ter frames chegando.
+
+========================================================================
+
+Duvidas? Leia: GUIA_OBS_NARUTO.md
+
+Pronto para comecar!

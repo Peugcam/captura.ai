@@ -1,0 +1,20 @@
+# GTA Analytics Capture Client Dependencies
+
+# HTTP Client
+httpx>=0.26.0
+
+# Image Processing
+Pillow>=10.0.0
+
+# Screen Capture (Modern - Recommended)
+windows-capture>=1.5.0
+
+# Screen Capture (Fallback)
+d3dshot>=0.1.5
+
+# Alternative if windows-capture fails
+mss>=9.0.0
+
+# Window detection
+pywin32>=306
+psutil>=5.9.0

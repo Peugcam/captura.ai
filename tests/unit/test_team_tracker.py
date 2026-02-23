@@ -122,12 +122,12 @@ class TestTeamTracker:
         """Test getting stats for a specific team"""
         tracker.register_kill("p1", "TeamA", "p2", "TeamB")
         tracker.register_kill("p3", "TeamA", "p4", "TeamC")
-        
+
         stats = tracker.get_team_stats("TeamA")
-        
+
         assert stats is not None
         assert stats['name'] == 'TeamA'
-        assert stats['total_kills'] == 2
+        assert stats['kills'] == 2
         assert stats['alive'] == 2
         assert stats['dead'] == 0
     
@@ -208,19 +208,19 @@ class TestTeamTracker:
         """Test getting complete match summary"""
         tracker.register_kill("p1", "TeamA", "p2", "TeamB")
         tracker.register_kill("p3", "TeamA", "p4", "TeamC")
-        
+
         summary = tracker.get_match_summary()
-        
+
         assert 'total_kills' in summary
         assert 'total_players' in summary
-        assert 'alive_players' in summary
-        assert 'dead_players' in summary
-        assert 'active_teams' in summary
+        assert 'alive' in summary
+        assert 'dead' in summary
+        assert 'teams_active' in summary
         assert 'teams' in summary
         assert 'leaderboard' in summary
-        
+
         assert summary['total_kills'] == 2
-        assert summary['dead_players'] == 2
+        assert summary['dead'] == 2
     
     # ========================================================================
     # Test: Export to Dict
@@ -234,8 +234,9 @@ class TestTeamTracker:
         
         assert 'teams' in exported
         assert 'kills_history' in exported
-        assert 'total_players' in exported
-        assert exported['total_players'] == 100
+        assert 'match' in exported
+        assert 'summary' in exported
+        assert exported['summary']['total_players'] == 2
     
     # ========================================================================
     # Test: Edge Cases
@@ -278,8 +279,8 @@ class TestTeamTracker:
         tracker.register_kill("enemy3", "TeamC", "p3", "TeamA")
         
         team_a = tracker.teams['TeamA']
-        assert team_a.alive_count() == 0
-        assert team_a.dead_count() == 3
+        assert team_a.alive_count == 0
+        assert team_a.dead_count == 3
     
     def test_empty_tracker_stats(self, tracker):
         """Test getting stats from empty tracker"""
@@ -300,22 +301,22 @@ class TestTeamClass:
     """Test Team dataclass"""
     
     def test_team_alive_count(self):
-        """Test Team.alive_count()"""
+        """Test Team.alive_count property"""
         team = Team(name="TestTeam")
         team.players['p1'] = Player(name='p1', team='TestTeam', alive=True)
         team.players['p2'] = Player(name='p2', team='TestTeam', alive=False)
         team.players['p3'] = Player(name='p3', team='TestTeam', alive=True)
-        
-        assert team.alive_count() == 2
-    
+
+        assert team.alive_count == 2
+
     def test_team_dead_count(self):
-        """Test Team.dead_count()"""
+        """Test Team.dead_count property"""
         team = Team(name="TestTeam")
         team.players['p1'] = Player(name='p1', team='TestTeam', alive=True)
         team.players['p2'] = Player(name='p2', team='TestTeam', alive=False)
         team.players['p3'] = Player(name='p3', team='TestTeam', alive=False)
-        
-        assert team.dead_count() == 2
+
+        assert team.dead_count == 2
     
     def test_team_get_alive_players(self):
         """Test Team.get_alive_players()"""
@@ -336,3 +337,150 @@ class TestTeamClass:
         dead = team.get_dead_players()
         assert len(dead) == 1
         assert dead[0].name == 'p2'
+
+
+# ============================================================================
+# Test Advanced Features
+# ============================================================================
+
+class TestTeamTrackerAdvanced:
+    """Test advanced features and edge cases"""
+
+    @pytest.fixture
+    def tracker(self):
+        """Create tracker instance"""
+        return TeamTracker(total_players=100)
+
+    def test_get_team_by_name(self, tracker):
+        """Test accessing team directly from teams dict"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+
+        # Get existing team
+        team = tracker.teams.get("TeamA")
+        assert team is not None
+        assert team.name == "TeamA"
+
+        # Get non-existent team
+        assert tracker.teams.get("TeamX") is None
+
+    def test_get_match_summary_complete(self, tracker):
+        """Test complete match summary structure"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+        tracker.register_kill("charlie", "TeamC", "david", "TeamB", "60m")
+
+        summary = tracker.get_match_summary()
+
+        # Verify all required keys
+        assert "total_players" in summary
+        assert "alive" in summary  # Not "total_alive"
+        assert "dead" in summary   # Not "total_dead"
+        assert "total_kills" in summary
+        assert "teams_total" in summary  # Not "total_teams"
+        assert "teams" in summary
+        assert "leaderboard" in summary
+
+        # Verify values
+        assert summary["total_players"] == 4
+        assert summary["teams_total"] == 3
+        assert summary["total_kills"] == 2
+        assert len(summary["teams"]) == 3
+
+    def test_fuzzy_match_empty_name(self, tracker):
+        """Test fuzzy matching with empty name"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+
+        # Empty name should return None
+        result = tracker._find_player_fuzzy("", "TeamA")
+        assert result is None
+
+    def test_fuzzy_match_nonexistent_team(self, tracker):
+        """Test fuzzy matching with non-existent team"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+
+        # Non-existent team should return None
+        result = tracker._find_player_fuzzy("player", "TeamX")
+        assert result is None
+
+    def test_fuzzy_match_low_similarity(self, tracker):
+        """Test fuzzy matching with low similarity"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+
+        # Very different name (< 70% similarity) should return None
+        result = tracker._find_player_fuzzy("xyz123", "TeamA")
+        assert result is None
+
+    def test_fuzzy_match_with_variations(self, tracker):
+        """Test fuzzy matching with name variations"""
+        # Register player with base name
+        tracker.register_kill("alice99", "TeamA", "bob", "TeamB", "50m")
+
+        # Similar name should fuzzy match
+        tracker.register_kill("alice_99", "TeamA", "charlie", "TeamC", "60m")
+
+        # Should have only 1 alice (fuzzy matched)
+        team_a = tracker.teams["TeamA"]
+        assert len(team_a.players) == 1
+        assert team_a.players["alice99"].kills == 2
+
+    def test_get_leaderboard_with_limit(self, tracker):
+        """Test leaderboard with various limits"""
+        # Create multiple players with kills
+        tracker.register_kill("alice", "TeamA", "victim1", "TeamX", "50m")
+        tracker.register_kill("alice", "TeamA", "victim2", "TeamX", "51m")
+        tracker.register_kill("alice", "TeamA", "victim3", "TeamX", "52m")
+
+        tracker.register_kill("bob", "TeamB", "victim4", "TeamX", "60m")
+        tracker.register_kill("bob", "TeamB", "victim5", "TeamX", "61m")
+
+        tracker.register_kill("charlie", "TeamC", "victim6", "TeamX", "70m")
+
+        # Get top 2
+        leaderboard = tracker.get_leaderboard(limit=2)
+        assert len(leaderboard) == 2
+        assert leaderboard[0]["name"] == "alice"
+        assert leaderboard[0]["kills"] == 3
+        assert leaderboard[1]["name"] == "bob"
+        assert leaderboard[1]["kills"] == 2
+
+    def test_get_all_teams_stats_complete(self, tracker):
+        """Test complete team stats structure"""
+        tracker.register_kill("alice", "TeamA", "bob", "TeamB", "50m")
+        tracker.register_kill("charlie", "TeamA", "david", "TeamB", "60m")
+
+        all_stats = tracker.get_all_teams_stats()
+
+        assert len(all_stats) == 2
+
+        for team_stat in all_stats:
+            assert "name" in team_stat
+            assert "alive" in team_stat
+            assert "dead" in team_stat
+            assert "total" in team_stat
+            assert "kills" in team_stat
+            assert "deaths" in team_stat
+            assert "players" in team_stat
+
+            # Each player should have required fields
+            for player in team_stat["players"]:
+                assert "name" in player
+                assert "alive" in player
+                assert "kills" in player
+                assert "deaths" in player
+
+    def test_friendly_fire_tracking(self, tracker):
+        """Test that friendly fire is properly tracked"""
+        # alice kills teammate bob
+        tracker.register_kill("alice", "TeamA", "bob", "TeamA", "10m")
+
+        team_a = tracker.teams["TeamA"]
+
+        # Both should be in same team
+        assert "alice" in team_a.players
+        assert "bob" in team_a.players
+
+        # Alice should have 1 kill
+        assert team_a.players["alice"].kills == 1
+
+        # Bob should be dead
+        assert team_a.players["bob"].alive is False
+        assert team_a.players["bob"].deaths == 1

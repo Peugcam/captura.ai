@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+    <title>GTA Analytics - Battle Royale Tracker</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="app-icon">🎮</div>
+                    <div class="app-title">
+                        <h1>GTA Analytics</h1>
+                        <p class="subtitle">Battle Royale Real-Time Tracking</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button class="btn-icon" id="btn-dashboard" title="Abrir Dashboard">
+                        <span>📊</span>
+                    </button>
+                    <button class="btn-icon" id="btn-settings" title="Configurações">
+                        <span>⚙️</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Status Card -->
+            <section class="status-card">
+                <div class="status-header">
+                    <div class="status-indicator">
+                        <div class="status-dot" id="status-dot">⚫</div>
+                        <div class="status-info">
+                            <h3 id="status-text">Aguardando início...</h3>
+                            <p class="status-detail" id="status-detail">Clique em "Iniciar Captura" para começar</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-icon">📸</div>
+                        <div class="stat-content">
+                            <p class="stat-label">Frames Enviados</p>
+                            <p class="stat-value" id="frames-count">0</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-box">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-content">
+                            <p class="stat-label">FPS Atual</p>
+                            <p class="stat-value" id="current-fps">0.0</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-box">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-content">
+                            <p class="stat-label">Uptime</p>
+                            <p class="stat-value" id="uptime">00:00</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-box">
+                        <div class="stat-icon">❌</div>
+                        <div class="stat-content">
+                            <p class="stat-label">Erros</p>
+                            <p class="stat-value stat-error" id="errors-count">0</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Mode Selection -->
+            <section class="settings-panel">
+                <h3>🎬 Modo de Captura</h3>
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <label>
+                            <span class="label-icon">🎮</span>
+                            Selecione o Modo
+                        </label>
+                        <div class="mode-selector">
+                            <button class="mode-btn active" data-mode="live" id="mode-live-btn">
+                                <span class="mode-icon">🎮</span>
+                                <strong>Captura ao Vivo</strong>
+                                <p>GTA V rodando no PC</p>
+                            </button>
+                            <button class="mode-btn" data-mode="video" id="mode-video-btn">
+                                <span class="mode-icon">📹</span>
+                                <strong>Vídeo Gravado</strong>
+                                <p>YouTube ou arquivo local</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="setting-group" id="video-input-group" style="display: none;">
+                        <label for="video-input">
+                            <span class="label-icon">📁</span>
+                            Vídeo ou URL do YouTube
+                        </label>
+                        <input
+                            type="text"
+                            id="video-input"
+                            class="input-field"
+                            placeholder="Cole URL do YouTube ou clique para selecionar arquivo">
+                        <button class="btn btn-secondary" id="browse-video-btn">
+                            <span>📂 Selecionar Arquivo</span>
+                        </button>
+                        <p class="input-help">YouTube, arquivo MP4, AVI, MOV, etc.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controls -->
+            <section class="controls-section">
+                <button class="btn btn-primary btn-large" id="start-btn">
+                    <span class="btn-icon">▶️</span>
+                    <span>Iniciar Captura</span>
+                </button>
+                <button class="btn btn-secondary btn-large" id="stop-btn" disabled>
+                    <span class="btn-icon">⏹️</span>
+                    <span>Parar</span>
+                </button>
+            </section>
+
+            <!-- Settings Panel -->
+            <section class="settings-panel" id="settings-panel" style="display: none;">
+                <h3>⚙️ Configurações</h3>
+
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <label for="server-url">
+                            <span class="label-icon">🌐</span>
+                            Servidor Backend
+                        </label>
+                        <input
+                            type="text"
+                            id="server-url"
+                            class="input-field"
+                            value="https://gta-analytics-v2.fly.dev"
+                            placeholder="https://seu-servidor.com">
+                        <p class="input-help">URL do servidor que receberá os frames</p>
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="fps-slider">
+                            <span class="label-icon">🎬</span>
+                            Taxa de Captura: <strong id="fps-value">0.5</strong> FPS
+                        </label>
+                        <input
+                            type="range"
+                            id="fps-slider"
+                            class="slider"
+                            min="0.1"
+                            max="2.0"
+                            step="0.1"
+                            value="0.5">
+                        <div class="slider-labels">
+                            <span>Economia (0.1)</span>
+                            <span>Balanceado (0.5)</span>
+                            <span>Performance (2.0)</span>
+                        </div>
+                        <p class="input-help">Menor = menos custos API, Maior = mais responsivo</p>
+                    </div>
+
+                    <div class="setting-group">
+                        <label>
+                            <span class="label-icon">💰</span>
+                            Estimativa de Custo
+                        </label>
+                        <div class="cost-estimate">
+                            <div class="cost-row">
+                                <span>Por hora:</span>
+                                <strong id="cost-hour">$0.13</strong>
+                            </div>
+                            <div class="cost-row">
+                                <span>Evento 3h:</span>
+                                <strong id="cost-event">$0.40</strong>
+                            </div>
+                        </div>
+                        <p class="input-help">Baseado em Together AI ($0.30/1M tokens)</p>
+                    </div>
+                </div>
+
+                <div class="settings-actions">
+                    <button class="btn btn-primary" id="save-settings-btn">
+                        <span>💾 Salvar Configurações</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Log Terminal -->
+            <section class="log-section">
+                <div class="log-header">
+                    <h3>📝 Log em Tempo Real</h3>
+                    <button class="btn-icon btn-small" id="clear-log-btn" title="Limpar log">
+                        <span>🗑️</span>
+                    </button>
+                </div>
+                <div class="log-terminal" id="log-terminal">
+                    <div class="log-entry log-info">
+                        <span class="log-timestamp">[00:00:00]</span>
+                        <span class="log-message">Aguardando início da captura...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Links -->
+            <section class="quick-links">
+                <h3>🔗 Links Rápidos</h3>
+                <div class="links-grid">
+                    <button class="link-card" data-url="https://gta-analytics-v2.fly.dev/strategist">
+                        <span class="link-icon">📊</span>
+                        <div class="link-content">
+                            <strong>Dashboard Estrategista</strong>
+                            <p>Visualizar kills em tempo real</p>
+                        </div>
+                    </button>
+                    <button class="link-card" data-url="https://gta-analytics-v2.fly.dev/tournament">
+                        <span class="link-icon">🏆</span>
+                        <div class="link-content">
+                            <strong>Gerenciar Torneio</strong>
+                            <p>Configurar times e jogadores</p>
+                        </div>
+                    </button>
+                    <button class="link-card" data-url="https://gta-analytics-v2.fly.dev/monitor">
+                        <span class="link-icon">📡</span>
+                        <div class="link-content">
+                            <strong>Monitor</strong>
+                            <p>Status do servidor backend</p>
+                        </div>
+                    </button>
+                    <button class="link-card" data-url="https://github.com/youruser/gta-analytics">
+                        <span class="link-icon">📖</span>
+                        <div class="link-content">
+                            <strong>Documentação</strong>
+                            <p>Guias e ajuda</p>
+                        </div>
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>
+                GTA Analytics v1.0.0 |
+                Desenvolvido por <strong>Paulo Eugenio Campos</strong> |
+                Cliente: <strong>Luis Otavio</strong>
+            </p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

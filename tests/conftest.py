@@ -135,23 +135,23 @@ def mock_multiple_kills() -> List[Dict]:
     """Mock multiple kills for team tracker testing"""
     return [
         {
-            'killer': 'player1',
+            'killer': 'alice',
             'killer_team': 'TeamA',
-            'victim': 'player2',
+            'victim': 'bob',
             'victim_team': 'TeamB',
             'distance': '100m'
         },
         {
-            'killer': 'player3',
+            'killer': 'charlie',
             'killer_team': 'TeamA',
-            'victim': 'player4',
+            'victim': 'david',
             'victim_team': 'TeamC',
             'distance': '50m'
         },
         {
-            'killer': 'player1',
+            'killer': 'alice',
             'killer_team': 'TeamA',
-            'victim': 'player5',
+            'victim': 'eve',
             'victim_team': 'TeamB',
             'distance': '150m'
         }

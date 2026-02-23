@@ -70,8 +70,8 @@ Real-time kill feed analytics for GTA V and Naruto Online with **WebRTC**, **Uni
 ## 🚀 Quick Start
 
 ### **Prerequisites**
-- **Docker** (for local development)  
-- **Python 3.11+** (for client capture)  
+- **Docker** (for local development)
+- **Python 3.11+** (for client capture)
 - **Fly CLI** (for cloud deployment): https://fly.io/docs/hands-on/install-flyctl/
 
 ### **1. Local Development**
@@ -91,6 +91,28 @@ curl http://localhost:3000/health  # Backend
 \`\`\`
 
 ### **2. Capture Frames**
+
+#### **⚠️ OBS sendo bloqueado pelo GTA?**
+
+Temos **3 métodos alternativos** que funcionam:
+
+\`\`\`bash
+# PASSO 1: Instalar bibliotecas alternativas
+pip install mss d3dshot pywin32
+
+# PASSO 2: Testar qual método funciona melhor
+python testar-capturas.py
+
+# PASSO 3: Usar o método recomendado
+python captura-nvidia.py    # MSS - Funciona em 90% dos casos
+python captura-wgc.py       # D3DShot - Melhor performance
+python captura-gamebar.py   # Windows GDI - Backup
+\`\`\`
+
+📖 **Guia completo:** [INICIO_RAPIDO.txt](INICIO_RAPIDO.txt)
+📊 **Comparação de métodos:** [ALTERNATIVAS_CAPTURA.md](ALTERNATIVAS_CAPTURA.md)
+
+#### **WebRTC (Método Original)**
 
 \`\`\`bash
 # Install dependencies

@@ -1,7 +1,7 @@
 # Fly.io configuration for GTA Analytics Backend
 # Deploy: fly deploy --config backend/fly.toml
 
-app = "gta-analytics-backend"
+app = "gta-analytics-v2"
 primary_region = "gru"  # São Paulo, Brazil
 
 # Build configuration
@@ -70,7 +70,7 @@ primary_region = "gru"  # São Paulo, Brazil
 
 # Persistent storage for exports
 [mounts]
-  source = "gta_exports"
+  source = "gta_analytics_data"
   destination = "/app/exports"
 
 # Metrics

@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
-from backend.processor import FrameProcessor, OCRPreFilter, VisionProcessor
+from backend.processor import FrameProcessor, VisionPreFilter, VisionProcessor
 from src.brazilian_kill_parser import BrazilianKillParser
 from src.team_tracker import TeamTracker
 

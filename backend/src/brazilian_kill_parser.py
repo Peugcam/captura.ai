@@ -117,10 +117,15 @@ class BrazilianKillParser:
             distance = None
 
             # Pular possível ícone (emoji, símbolo)
-            # Geralmente tem 1-2 caracteres especiais
+            # Emojis geralmente não contêm caracteres alfanuméricos
             start_idx = 0
-            if len(after_keyword) > 0 and len(after_keyword[0]) <= 2:
-                start_idx = 1  # Pular ícone
+            if len(after_keyword) > 0:
+                first_token = after_keyword[0]
+                # Considerar ícone APENAS se não tem letras/números (puro emoji/símbolo)
+                # Isso permite "BB" (team) mas pula "💀🔫💥" (emojis)
+                has_alnum = any(c.isalnum() for c in first_token)
+                if not has_alnum:
+                    start_idx = 1  # Pular ícone
 
             remaining = after_keyword[start_idx:]
 

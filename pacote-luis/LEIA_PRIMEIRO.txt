@@ -1,0 +1,84 @@
+================================================================================
+  GTA ANALYTICS V2 - PACOTE PARA LUIS
+================================================================================
+
+SISTEMA DE RASTREAMENTO DE KILL FEED PARA TORNEIOS GTA V
+
+--------------------------------------------------------------------------------
+ARQUIVOS IMPORTANTES:
+--------------------------------------------------------------------------------
+
+1. gta-analytics-v2.py           - PROGRAMA PRINCIPAL (executar este)
+2. config.json                   - Configurações (não precisa mexer)
+3. INSTRUCOES_SENHA_OBS.md       - LEIA PRIMEIRO! Como configurar senha
+4. COMO_USAR.md                  - Manual completo
+5. CONFIGURAR_OBS_JANELA_FIXA.md - Como configurar OBS
+
+--------------------------------------------------------------------------------
+INICIO RAPIDO (3 PASSOS):
+--------------------------------------------------------------------------------
+
+PASSO 1: INSTALAR DEPENDENCIAS
+   Abra o terminal/prompt e digite:
+
+   pip install obsws-python requests pillow
+
+PASSO 2: CONFIGURAR SENHA DO OBS
+   Leia o arquivo: INSTRUCOES_SENHA_OBS.md
+   (Você precisa colocar SUA senha do OBS no arquivo gta-analytics-v2.py)
+
+PASSO 3: EXECUTAR
+   No terminal:
+
+   py gta-analytics-v2.py
+
+--------------------------------------------------------------------------------
+DASHBOARD (ONDE VER OS DADOS):
+--------------------------------------------------------------------------------
+
+Abra no navegador:
+https://gta-analytics-v2.fly.dev/strategist
+
+Você verá:
+- Times vivos/mortos
+- Contagem de jogadores
+- Kills em tempo real
+- Rankings
+
+--------------------------------------------------------------------------------
+REQUISITOS:
+--------------------------------------------------------------------------------
+
+✓ OBS Studio instalado e aberto
+✓ Python 3.7 ou superior
+✓ Conexão com internet
+✓ Jogo rodando (GTA V)
+
+--------------------------------------------------------------------------------
+PRIORIDADES (CONFORME VITOR):
+--------------------------------------------------------------------------------
+
+1. Times vivos e contagem de jogadores ✓
+2. Contagem de kills ✓
+3. Rankings ✓
+
+--------------------------------------------------------------------------------
+TIPOS DE TORNEIO SUPORTADOS:
+--------------------------------------------------------------------------------
+
+- Etapa 1: Times variáveis
+- Etapa 2: ~100 times
+- Championship: 20 times
+
+--------------------------------------------------------------------------------
+SUPORTE:
+--------------------------------------------------------------------------------
+
+Problemas? Leia: COMO_USAR.md (seção "SOLUCAO DE PROBLEMAS")
+
+Dashboard: https://gta-analytics-v2.fly.dev/strategist
+Acesso mobile: ✓ (funciona no celular também)
+
+================================================================================
+DESENVOLVIDO POR: Paulo | DATA: 22/02/2026 | VERSÃO: 2.0.0
+================================================================================

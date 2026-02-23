@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OBS Frame Capture</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            display: none; /* Invisivel no OBS */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        // Configuracoes
+        const GATEWAY_URL = 'http://localhost:8000/upload';
+        const CAPTURE_FPS = 2; // Captura 2 frames por segundo
+        const CAPTURE_INTERVAL = 1000 / CAPTURE_FPS;
+
+        let frameCount = 0;
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+
+        // Captura frame do OBS
+        async function captureFrame() {
+            try {
+                // Usa API de captura de tela do browser
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { mediaSource: 'screen' }
+                });
+
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
+
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+
+                    // Desenha frame no canvas
+                    ctx.drawImage(video, 0, 0);
+
+                    // Converte para blob
+                    canvas.toBlob(async (blob) => {
+                        if (blob) {
+                            await uploadFrame(blob);
+                        }
+                        stream.getTracks().forEach(track => track.stop());
+                    }, 'image/jpeg', 0.8);
+                };
+            } catch (err) {
+                console.error('Erro ao capturar frame:', err);
+            }
+        }
+
+        // Envia frame para o gateway
+        async function uploadFrame(blob) {
+            try {
+                const formData = new FormData();
+                formData.append('file', blob, `frame_${Date.now()}.jpg`);
+
+                const response = await fetch(GATEWAY_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    frameCount++;
+                    console.log(`Frame ${frameCount} enviado com sucesso`);
+                } else {
+                    console.error('Erro ao enviar frame:', response.status);
+                }
+            } catch (err) {
+                console.error('Erro no upload:', err);
+            }
+        }
+
+        // Inicia captura periodica
+        console.log('OBS Frame Capture iniciado');
+        console.log(`Capturando ${CAPTURE_FPS} frames/segundo`);
+
+        setInterval(captureFrame, CAPTURE_INTERVAL);
+    </script>
+</body>
+</html>
