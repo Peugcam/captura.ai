@@ -82,8 +82,8 @@ cd C:\Users\paulo\OneDrive\Desktop\gta-analytics-v2\backend
 
 # Configurar API keys como secrets
 fly secrets set \
-  OPENAI_API_KEY="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" \
-  OPENROUTER_API_KEY="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" \
+  OPENAI_API_KEY="your_openai_api_key_here" \
+  OPENROUTER_API_KEY="your_openrouter_api_key_here" \
   --app gta-analytics-backend
 
 # Verificar secrets configurados
