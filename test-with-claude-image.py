@@ -63,12 +63,20 @@ async def test_detection():
     print("\nChamando GPT-4o Vision API...")
     print("Custo: ~$0.002\n")
 
+    import os
+
+    # Use environment variable for API key
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key:
+        print("ERROR: Set OPENROUTER_API_KEY environment variable")
+        return
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             response = await client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
-                    "Authorization": "Bearer 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",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
