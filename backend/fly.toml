@@ -59,14 +59,14 @@ primary_region = "gru"  # São Paulo, Brazil
     path = "/health"
     protocol = "http"
 
-# VM resources (otimizado para produção)
-# Fase 1 (1-10 partidas): 2 CPU, 2GB RAM
-# Fase 2 (10-30 partidas): escale para 4 CPU ou 2 instâncias
+# VM resources (otimizado para custo)
+# Configuração atual: 1 CPU, 1GB RAM (ideal para 1-10 partidas simultâneas)
+# Para escalar: Fase 2 (10-30 partidas): 2 CPU, 2GB RAM
 # Fase 3 (30-50 partidas): 3 instâncias de 4 CPU, 4GB
 [vm]
   cpu_kind = "shared"
-  cpus = 2
-  memory_mb = 2048  # Aumentado para OCR workers (recomendação de produção)
+  cpus = 1
+  memory_mb = 1024  # Reduzido para economizar custos
 
 # Persistent storage for exports
 [mounts]
