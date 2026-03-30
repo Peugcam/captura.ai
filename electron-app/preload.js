@@ -100,6 +100,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
      */
     removeStatusListener: () => {
         ipcRenderer.removeAllListeners('status-update');
+    },
+
+    /**
+     * Receber status do GTA V (detectado ou não)
+     */
+    onGtaStatus: (callback) => {
+        ipcRenderer.on('gta-status', (event, data) => callback(data));
+    },
+
+    /**
+     * Receber status do servidor (online, waking, offline)
+     */
+    onServerStatus: (callback) => {
+        ipcRenderer.on('server-status', (event, data) => callback(data));
     }
 });
 
