@@ -45,3 +45,6 @@ logs/
 # Test files
 test_results/
 screenshots/
+
+# Git worktrees
+.worktrees/
