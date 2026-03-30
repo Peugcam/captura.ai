@@ -44,6 +44,20 @@
                     </div>
                 </div>
 
+                <!-- Indicadores GTA V e Servidor -->
+                <div class="indicators-row">
+                    <div class="indicator-badge" id="gta-indicator">
+                        <span class="indicator-dot">⚫</span>
+                        <span class="indicator-label">GTA V</span>
+                        <span class="indicator-value" id="gta-indicator-text">Aguardando</span>
+                    </div>
+                    <div class="indicator-badge" id="server-indicator">
+                        <span class="indicator-dot">⚫</span>
+                        <span class="indicator-label">Servidor</span>
+                        <span class="indicator-value" id="server-indicator-text">Aguardando</span>
+                    </div>
+                </div>
+
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-box">
@@ -132,6 +146,9 @@
                     <span>Parar</span>
                 </button>
             </section>
+
+            <!-- Barra de progresso: servidor acordando -->
+            <div class="waking-bar" id="waking-bar"></div>
 
             <!-- Settings Panel -->
             <section class="settings-panel" id="settings-panel" style="display: none;">

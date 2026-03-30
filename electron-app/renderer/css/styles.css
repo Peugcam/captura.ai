@@ -199,6 +199,121 @@ body {
    COMPONENTS - Stats Grid
    ============================================================================ */
 
+.indicators-row {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.indicator-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--bg-card);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex: 1;
+    border: 1px solid var(--border-color);
+}
+
+.indicator-badge .indicator-dot {
+    font-size: 14px;
+}
+
+.indicator-badge .indicator-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.indicator-badge .indicator-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-left: auto;
+}
+
+.indicator-badge.active-green {
+    border-color: #4caf50;
+}
+
+.indicator-badge.active-yellow {
+    border-color: #ff9800;
+}
+
+.indicator-badge.active-red {
+    border-color: #f44336;
+}
+
+/* Animação de pulso para indicadores ativos */
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
+}
+
+@keyframes pulse-yellow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(255, 152, 0, 0); }
+}
+
+.indicator-badge.active-green {
+    animation: pulse-green 2s infinite;
+}
+
+.indicator-badge.active-yellow {
+    animation: pulse-yellow 1s infinite;
+}
+
+/* Barra de progresso para servidor acordando */
+.waking-bar {
+    display: none;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #ff9800, transparent);
+    background-size: 200% 100%;
+    animation: waking-slide 1.5s linear infinite;
+    border-radius: 2px;
+    margin: 8px 0 0;
+}
+
+@keyframes waking-slide {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.waking-bar.visible {
+    display: block;
+}
+
+/* Transição suave no status card */
+#status-text, #status-detail {
+    transition: all 0.3s ease;
+}
+
+/* Botão iniciar mais destacado */
+.btn-primary.btn-large {
+    background: linear-gradient(135deg, #4a5f3a, #6b8e4e);
+    box-shadow: 0 4px 15px rgba(74, 95, 58, 0.4);
+    transition: all 0.2s ease;
+}
+
+.btn-primary.btn-large:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 95, 58, 0.6);
+}
+
+.btn-primary.btn-large:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.log-entry.log-success .log-message {
+    color: #6b8e4e;
+}
+
+.log-entry.log-frame .log-message {
+    color: #5f7a68;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

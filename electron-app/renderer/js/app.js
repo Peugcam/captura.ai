@@ -120,14 +120,48 @@ async function handleBrowseVideo() {
 }
 
 function setupIPCListeners() {
-    // Receber logs do Python
     window.electronAPI.onLog((log) => {
         addLog(log);
     });
 
-    // Receber atualizações de status
     window.electronAPI.onStatusUpdate((status) => {
         updateStatus(status);
+    });
+
+    // Status do GTA V
+    window.electronAPI.onGtaStatus(({ active }) => {
+        const badge = document.getElementById('gta-indicator');
+        const dot = badge.querySelector('.indicator-dot');
+        const text = document.getElementById('gta-indicator-text');
+
+        badge.className = 'indicator-badge ' + (active ? 'active-green' : 'active-red');
+        dot.textContent = active ? '🟢' : '🔴';
+        text.textContent = active ? 'Detectado' : 'Não detectado';
+    });
+
+    // Status do servidor
+    window.electronAPI.onServerStatus(({ status }) => {
+        const badge = document.getElementById('server-indicator');
+        const dot = badge.querySelector('.indicator-dot');
+        const text = document.getElementById('server-indicator-text');
+        const wakingBar = document.getElementById('waking-bar');
+
+        if (status === 'online') {
+            badge.className = 'indicator-badge active-green';
+            dot.textContent = '🟢';
+            text.textContent = 'Online';
+            wakingBar.classList.remove('visible');
+        } else if (status === 'waking') {
+            badge.className = 'indicator-badge active-yellow';
+            dot.textContent = '🟡';
+            text.textContent = 'Acordando...';
+            wakingBar.classList.add('visible');
+        } else {
+            badge.className = 'indicator-badge active-red';
+            dot.textContent = '🔴';
+            text.textContent = 'Offline';
+            wakingBar.classList.remove('visible');
+        }
     });
 }
 
@@ -394,16 +428,16 @@ function addLog(message) {
     const entry = document.createElement('div');
     entry.className = 'log-entry';
 
-    // Detectar tipo de log
-    if (message.includes('❌') || message.toLowerCase().includes('error')) {
+    if (message.includes('❌') || message.toLowerCase().includes('erro')) {
         entry.classList.add('log-error');
-    } else if (message.includes('⚠️') || message.toLowerCase().includes('warning')) {
+    } else if (message.includes('⚠️') || message.toLowerCase().includes('aviso')) {
         entry.classList.add('log-warning');
-    } else if (message.includes('ℹ️') || message.toLowerCase().includes('info')) {
-        entry.classList.add('log-info');
+    } else if (message.includes('✅') || message.includes('🚀') || message.includes('▶️')) {
+        entry.classList.add('log-success');
+    } else if (message.includes('📸')) {
+        entry.classList.add('log-frame');
     }
 
-    // Timestamp
     const now = new Date();
     const timestamp = now.toLocaleTimeString('pt-BR');
 
@@ -413,11 +447,8 @@ function addLog(message) {
     `;
 
     terminal.appendChild(entry);
-
-    // Auto-scroll
     terminal.scrollTop = terminal.scrollHeight;
 
-    // Limitar a 500 entradas
     while (terminal.children.length > 500) {
         terminal.removeChild(terminal.firstChild);
     }
