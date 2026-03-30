@@ -48,3 +48,4 @@ screenshots/
 
 # Git worktrees
 .worktrees/
+.superpowers/
