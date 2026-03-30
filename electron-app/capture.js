@@ -32,12 +32,12 @@ class GTACapture {
     }
 
     /**
-     * Verifica se GTA V é a janela ativa
+     * Verifica se GTA V está rodando (por nome do processo)
      */
     isGtaActive() {
         return new Promise((resolve) => {
             exec(
-                'powershell -NoProfile -Command "Get-Process | Where-Object { $_.MainWindowTitle -match \'Grand Theft Auto\' } | Measure-Object | Select-Object -ExpandProperty Count"',
+                'powershell -NoProfile -Command "Get-Process -Name GTA5 -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count"',
                 { timeout: 2000 },
                 (err, stdout) => {
                     if (err) return resolve(true); // Não bloquear se erro
