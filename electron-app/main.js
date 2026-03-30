@@ -8,14 +8,14 @@
  */
 
 const { app, BrowserWindow, ipcMain, Menu, Tray, shell, dialog } = require('electron');
-const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const GTACapture = require('./capture');
 
 // Variáveis globais
 let mainWindow = null;
 let tray = null;
-let pythonProcess = null;
+let captureInstance = null;
 let captureStatus = {
     running: false,
     framesSent: 0,
@@ -46,26 +46,26 @@ function createWindow() {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
-            contextIsolation: true,
-            enableRemoteModule: false,
-            sandbox: true
+            contextIsolation: true
         },
         autoHideMenuBar: true,
         frame: true,
-        show: false, // Mostrar apenas quando pronto
+        show: true,
         center: true
     });
 
     // Carregar interface
     mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
 
+    // Fallback: mostrar após 3s mesmo se ready-to-show não disparar
+    setTimeout(() => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show(); }, 3000);
+
     // Mostrar quando pronto
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
 
-        if (isDev) {
-            mainWindow.webContents.openDevTools();
-        }
+        // DevTools desativado (use Ctrl+Shift+I para abrir manualmente)
+        // if (isDev) { mainWindow.webContents.openDevTools(); }
     });
 
     // Evento fechar
@@ -158,256 +158,41 @@ function createTray() {
 }
 
 /**
- * Iniciar captura Python
+ * Iniciar captura (JavaScript nativo - sem Python)
  */
 async function startPythonCapture(serverUrl, fps) {
-    if (pythonProcess) {
+    if (captureInstance && captureStatus.running) {
         sendToRenderer('log', '⚠️ Captura já está rodando!');
         return { success: false, error: 'Already running' };
     }
 
-    try {
-        // Caminho para Python embutido
-        const pythonExePath = getPythonPath();
+    captureInstance = new GTACapture(serverUrl, fps, sendToRenderer);
+    const result = captureInstance.start();
 
-        if (!fs.existsSync(pythonExePath)) {
-            throw new Error(`Python não encontrado: ${pythonExePath}`);
-        }
+    captureStatus.running = true;
+    captureStatus.startTime = Date.now();
+    captureStatus.framesSent = 0;
+    captureStatus.errors = 0;
+    updateTrayMenu();
 
-        sendToRenderer('log', '🚀 Iniciando captura...');
-        sendToRenderer('log', `📡 Servidor: ${serverUrl}`);
-        sendToRenderer('log', `🎬 FPS: ${fps}`);
-
-        // Spawn processo Python
-        pythonProcess = spawn(pythonExePath, [
-            '--server', serverUrl,
-            '--fps', fps.toString()
-        ], {
-            cwd: path.dirname(pythonExePath)
-        });
-
-        // Atualizar status
-        captureStatus.running = true;
-        captureStatus.startTime = Date.now();
-        captureStatus.framesSent = 0;
-        captureStatus.errors = 0;
-
-        // Stdout
-        pythonProcess.stdout.on('data', (data) => {
-            const output = data.toString().trim();
-            console.log('Python:', output);
-            sendToRenderer('log', output);
-
-            // Parsear frames enviados
-            const frameMatch = output.match(/Frame (\d+)/i);
-            if (frameMatch) {
-                captureStatus.framesSent = parseInt(frameMatch[1]);
-                captureStatus.lastFrameTime = Date.now();
-                sendToRenderer('status-update', captureStatus);
-            }
-        });
-
-        // Stderr
-        pythonProcess.stderr.on('data', (data) => {
-            const error = data.toString().trim();
-            console.error('Python Error:', error);
-            sendToRenderer('log', `❌ ${error}`);
-            captureStatus.errors++;
-        });
-
-        // Exit
-        pythonProcess.on('exit', (code) => {
-            console.log(`Python process exited with code ${code}`);
-            sendToRenderer('log', code === 0
-                ? '✅ Captura finalizada'
-                : `❌ Captura encerrada com erro (código ${code})`
-            );
-
-            pythonProcess = null;
-            captureStatus.running = false;
-            sendToRenderer('status-update', captureStatus);
-            updateTrayMenu();
-        });
-
-        // Error
-        pythonProcess.on('error', (err) => {
-            console.error('Python spawn error:', err);
-            sendToRenderer('log', `❌ Erro ao iniciar Python: ${err.message}`);
-            pythonProcess = null;
-            captureStatus.running = false;
-            sendToRenderer('status-update', captureStatus);
-        });
-
-        sendToRenderer('log', '✅ Captura iniciada com sucesso!');
-        sendToRenderer('status-update', captureStatus);
-        updateTrayMenu();
-
-        return { success: true };
-
-    } catch (error) {
-        console.error('Error starting Python:', error);
-        sendToRenderer('log', `❌ Erro: ${error.message}`);
-        return { success: false, error: error.message };
-    }
+    return result;
 }
 
 /**
- * Iniciar captura de vídeo
- */
-async function startVideoCapture(serverUrl, fps, videoSource) {
-    if (pythonProcess) {
-        sendToRenderer('log', 'Captura ja esta rodando!');
-        return { success: false, error: 'Already running' };
-    }
-
-    try {
-        // Caminho para executavel capture_video.exe
-        const captureVideoExe = getVideoCapturePath();
-
-        if (!fs.existsSync(captureVideoExe)) {
-            throw new Error(`Executavel capture_video.exe nao encontrado: ${captureVideoExe}`);
-        }
-
-        sendToRenderer('log', 'Iniciando captura de video...');
-        sendToRenderer('log', `Video: ${videoSource}`);
-        sendToRenderer('log', `Servidor: ${serverUrl}`);
-        sendToRenderer('log', `FPS: ${fps}`);
-
-        // Spawn processo Python para vídeo
-        pythonProcess = spawn(captureVideoExe, [
-            '--video', videoSource,
-            '--server', serverUrl,
-            '--fps', String(fps)
-        ]);
-
-        // Capturar output
-        pythonProcess.stdout.on('data', (data) => {
-            const output = data.toString().trim();
-            if (output) {
-                sendToRenderer('log', output);
-
-                // Parse stats
-                const frameMatch = output.match(/Frame (\d+)/);
-                if (frameMatch) {
-                    captureStatus.framesSent = parseInt(frameMatch[1]);
-                    captureStatus.lastFrameTime = Date.now();
-                    sendToRenderer('status-update', captureStatus);
-                }
-            }
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            const error = data.toString().trim();
-            if (error && !error.includes('UserWarning')) {
-                sendToRenderer('log', `Erro: ${error}`);
-                captureStatus.errors++;
-            }
-        });
-
-        pythonProcess.on('close', (code) => {
-            sendToRenderer('log', `Processo encerrado (codigo: ${code})`);
-            pythonProcess = null;
-            captureStatus.running = false;
-            sendToRenderer('status-update', captureStatus);
-        });
-
-        // Update status
-        captureStatus.running = true;
-        captureStatus.startTime = Date.now();
-        captureStatus.framesSent = 0;
-        captureStatus.errors = 0;
-
-        sendToRenderer('status-update', captureStatus);
-
-        return { success: true };
-
-    } catch (error) {
-        sendToRenderer('log', `Erro ao iniciar: ${error.message}`);
-        return { success: false, error: error.message };
-    }
-}
-
-/**
- * Parar captura Python
+ * Parar captura
  */
 function stopPythonCapture() {
-    if (!pythonProcess) {
+    if (!captureInstance || !captureStatus.running) {
         sendToRenderer('log', '⚠️ Nenhuma captura rodando');
         return { success: false, error: 'Not running' };
     }
 
-    try {
-        sendToRenderer('log', '⏹️ Parando captura...');
+    const result = captureInstance.stop();
+    captureInstance = null;
+    captureStatus.running = false;
+    updateTrayMenu();
 
-        const pid = pythonProcess.pid;
-
-        // No Windows, precisa matar a árvore de processos
-        if (process.platform === 'win32') {
-            // Usar taskkill para matar processo e seus filhos
-            const { execSync } = require('child_process');
-            try {
-                execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
-                sendToRenderer('log', '✅ Processo Python finalizado (PID: ' + pid + ')');
-            } catch (killError) {
-                console.error('Error killing process tree:', killError);
-                // Fallback: tentar kill normal
-                pythonProcess.kill();
-            }
-        } else {
-            // Linux/Mac: SIGTERM funciona
-            pythonProcess.kill('SIGTERM');
-
-            // Force kill após 3s se não parar
-            setTimeout(() => {
-                if (pythonProcess && !pythonProcess.killed) {
-                    pythonProcess.kill('SIGKILL');
-                }
-            }, 3000);
-        }
-
-        // Resetar variável imediatamente
-        pythonProcess = null;
-        captureStatus.running = false;
-        sendToRenderer('status-update', captureStatus);
-        updateTrayMenu();
-
-        return { success: true };
-
-    } catch (error) {
-        console.error('Error stopping Python:', error);
-        sendToRenderer('log', `❌ Erro ao parar: ${error.message}`);
-        pythonProcess = null; // Resetar mesmo em erro
-        captureStatus.running = false;
-        sendToRenderer('status-update', captureStatus);
-        return { success: false, error: error.message };
-    }
-}
-
-/**
- * Obter caminho do Python embutido
- */
-function getPythonPath() {
-    if (isDev) {
-        // Modo desenvolvimento: usar Python local
-        return path.join(process.cwd(), 'python/dist/capture.exe');
-    } else {
-        // Modo produção: Python embutido no app
-        return path.join(process.resourcesPath, 'python/capture.exe');
-    }
-}
-
-/**
- * Obter caminho do executavel de captura de video
- */
-function getVideoCapturePath() {
-    if (isDev) {
-        // Modo desenvolvimento: usar executavel local
-        // Use process.cwd() que sempre retorna o diretório correto
-        return path.join(process.cwd(), 'python/dist/capture_video.exe');
-    } else {
-        // Modo produção: executavel embutido no app
-        return path.join(process.resourcesPath, 'python/capture_video.exe');
-    }
+    return result;
 }
 
 /**
@@ -473,11 +258,7 @@ ipcMain.handle('start-capture', async (event, { serverUrl, fps, mode, videoSourc
     CONFIG.serverUrl = serverUrl;
     CONFIG.fps = fps;
 
-    if (mode === 'video' && videoSource) {
-        return await startVideoCapture(serverUrl, fps, videoSource);
-    } else {
-        return await startPythonCapture(serverUrl, fps);
-    }
+    return await startPythonCapture(serverUrl, fps);
 });
 
 /**
@@ -571,8 +352,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
     // No macOS, apps ficam ativos até Cmd+Q
     if (process.platform !== 'darwin') {
-        // Mas no Windows, só fecha se não tiver Python rodando
-        if (!pythonProcess) {
+        if (!captureStatus.running) {
             app.quit();
         }
     }
@@ -584,25 +364,10 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
     app.isQuitting = true;
 
-    // Parar Python se rodando
-    if (pythonProcess) {
-        console.log('Killing Python process on app quit...');
-        const pid = pythonProcess.pid;
-
-        if (process.platform === 'win32') {
-            // Windows: matar árvore de processos
-            const { execSync } = require('child_process');
-            try {
-                execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
-                console.log(`Python process ${pid} killed`);
-            } catch (error) {
-                console.error('Error killing Python on quit:', error);
-            }
-        } else {
-            pythonProcess.kill('SIGTERM');
-        }
-
-        pythonProcess = null;
+    // Parar captura se estiver rodando
+    if (captureInstance && captureStatus.running) {
+        captureInstance.stop();
+        captureInstance = null;
     }
 });
 
