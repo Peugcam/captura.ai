@@ -70,7 +70,7 @@ function createWindow() {
 
     // Evento fechar
     mainWindow.on('close', (event) => {
-        if (pythonProcess && !app.isQuitting) {
+        if (captureInstance && !app.isQuitting) {
             event.preventDefault();
             mainWindow.hide();
         }
@@ -323,6 +323,9 @@ ipcMain.handle('get-config', async (event) => {
  * Abrir URL externa
  */
 ipcMain.handle('open-external', async (event, url) => {
+    if (!url || !url.startsWith('https://')) {
+        return { success: false, error: 'Apenas URLs https:// são permitidas' };
+    }
     await shell.openExternal(url);
     return { success: true };
 });

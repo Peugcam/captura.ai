@@ -12,6 +12,9 @@ const { exec } = require('child_process');
 
 class GTACapture {
     constructor(serverUrl, fps, sendToRenderer) {
+        if (!serverUrl || !serverUrl.startsWith('https://')) {
+            throw new Error('serverUrl deve começar com https://');
+        }
         this.serverUrl = `${serverUrl}/api/frames/upload`;
         this.fps = fps;
         this.interval = 1000 / fps;
