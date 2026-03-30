@@ -71,6 +71,7 @@ class GTACapture {
         });
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            if (!this.running) return null; // aborta se stop() foi chamado
             try {
                 const response = await axios.post(this.serverUrl, form, {
                     headers: form.getHeaders(),
@@ -161,6 +162,7 @@ class GTACapture {
 
             // Envia com retry automático
             const response = await this.sendWithRetry(jpegBuffer);
+            if (!response) return; // stop() foi chamado durante retry
 
             if (response.status === 200) {
                 this.framesSent++;
