@@ -102,7 +102,13 @@ class GTACapture {
                     }
                     // Espera crescente: 3s, 5s, 8s
                     const delay = 3000 + (attempt - 1) * 2000;
-                    await new Promise(r => setTimeout(r, delay));
+                    await new Promise(r => {
+                        const t = setTimeout(r, delay);
+                        const check = setInterval(() => {
+                            if (!this.running) { clearTimeout(t); clearInterval(check); r(); }
+                        }, 200);
+                        setTimeout(() => clearInterval(check), delay + 100);
+                    });
                 } else {
                     throw err;
                 }
@@ -247,7 +253,7 @@ class GTACapture {
         this.sendToRenderer('log', '⏹️ Captura parada');
         this.sendToRenderer('log', `📊 Resumo: ${this.framesSent} frames enviados, ${this.errors} erros`);
         this.sendToRenderer('gta-status', { active: false });
-        this.sendToRenderer('server-status', { status: 'offline' });
+        this.sendToRenderer('server-status', { status: 'stopped' });
         this.sendToRenderer('status-update', {
             running: false,
             framesSent: this.framesSent,

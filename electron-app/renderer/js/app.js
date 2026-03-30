@@ -156,10 +156,15 @@ function setupIPCListeners() {
             dot.textContent = '🟡';
             text.textContent = 'Acordando...';
             wakingBar.classList.add('visible');
-        } else {
+        } else if (status === 'offline') {
             badge.className = 'indicator-badge active-red';
             dot.textContent = '🔴';
             text.textContent = 'Offline';
+            wakingBar.classList.remove('visible');
+        } else {
+            badge.className = 'indicator-badge';
+            dot.textContent = '⚫';
+            text.textContent = 'Aguardando';
             wakingBar.classList.remove('visible');
         }
     });

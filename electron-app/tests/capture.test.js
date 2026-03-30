@@ -128,6 +128,24 @@ describe('sendWithRetry', () => {
         axios.post.mockRejectedValue(genericError);
         await expect(capture.sendWithRetry(Buffer.alloc(100), 1)).rejects.toThrow('server error');
     });
+
+    test('tenta novamente em erro de conexão e retorna response na 2ª tentativa', async () => {
+        const { capture } = makeCapture();
+        capture.running = true;
+        const connError = Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' });
+        const mockResponse = { status: 200 };
+        axios.post
+            .mockRejectedValueOnce(connError)
+            .mockResolvedValueOnce(mockResponse);
+        // Substituir setTimeout para não esperar delay real
+        jest.useFakeTimers();
+        const promise = capture.sendWithRetry(Buffer.alloc(100), 2);
+        await jest.runAllTimersAsync();
+        const result = await promise;
+        expect(result).toEqual(mockResponse);
+        expect(axios.post).toHaveBeenCalledTimes(2);
+        jest.useRealTimers();
+    });
 });
 
 // ============================================================

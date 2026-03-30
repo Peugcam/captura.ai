@@ -82,7 +82,9 @@ function createWindow() {
 
     // Abrir links externos no browser
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        shell.openExternal(url);
+        if (url.startsWith('https://')) {
+            shell.openExternal(url);
+        }
         return { action: 'deny' };
     });
 }
