@@ -70,11 +70,26 @@ def test_gateway():
         return False
 
 def crop_kill_feed(image):
-    """Recorta regiao do kill feed"""
-    left = KILL_FEED_REGION["x"]
-    top = KILL_FEED_REGION["y"]
-    right = left + KILL_FEED_REGION["width"]
-    bottom = top + KILL_FEED_REGION["height"]
+    """Recorta regiao do kill feed com suporte a pixels fixos ou porcentagem"""
+    img_w, img_h = image.size
+
+    region = KILL_FEED_REGION
+
+    # Suporte a porcentagem (0.0 a 1.0) ou pixels fixos
+    if region.get("percent", False):
+        left   = int(region["x"] * img_w)
+        top    = int(region["y"] * img_h)
+        right  = left + int(region["width"] * img_w)
+        bottom = top  + int(region["height"] * img_h)
+    else:
+        # Pixels fixos: escala proporcional se imagem diferente de 1920x1080
+        scale_x = img_w / 1920
+        scale_y = img_h / 1080
+        left   = int(region["x"] * scale_x)
+        top    = int(region["y"] * scale_y)
+        right  = left + int(region["width"]  * scale_x)
+        bottom = top  + int(region["height"] * scale_y)
+
     return image.crop((left, top, right, bottom))
 
 def send_frame(image_data):
