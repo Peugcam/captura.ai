@@ -231,6 +231,8 @@ Se PC está lento:
    - NVIDIA: GeForce Experience
    - AMD: Adrenalin
 
+> O app detecta o GTA automaticamente pelo processo `GTA5.exe`. Não é necessário nenhuma configuração extra.
+
 ---
 
 ### Antivírus bloqueia
@@ -316,7 +318,7 @@ Mesmo processo! Dados ficam salvos.
 ## 🎯 CHECKLIST PRÉ-EVENTO
 
 **1 semana antes:**
-- [ ] Instalar GTA Analytics
+- [ ] Instalar GTA Analytics (não precisa instalar Python)
 - [ ] Testar captura 1x
 - [ ] Confirmar dashboard funciona
 

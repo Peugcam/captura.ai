@@ -46,8 +46,9 @@ Sistema completo de analytics em tempo real para campeonatos e torneios de GTA V
 ### Pré-requisitos
 
 - **Node.js** 18+ ([Download](https://nodejs.org/))
-- **Python** 3.10+ ([Download](https://www.python.org/))
 - **Git** (opcional)
+
+> Sem Python necessário. A captura é feita em JavaScript nativo via `desktopCapturer` do Electron.
 
 ### Instalação
 
@@ -55,17 +56,10 @@ Sistema completo de analytics em tempo real para campeonatos e torneios de GTA V
 # 1. Clone/baixe o projeto
 cd gta-analytics-v2/electron-app
 
-# 2. Instalar dependencies Node.js
+# 2. Instalar dependências
 npm install
 
-# 3. Build Python executable
-cd python
-python -m pip install -r requirements.txt
-python -m pip install pyinstaller
-pyinstaller --onefile --name capture capture.py
-cd ..
-
-# 4. Rodar em modo dev
+# 3. Rodar em modo dev
 npm start
 ```
 
@@ -76,16 +70,11 @@ npm start
 ### Build completo (Windows .exe + instalador):
 
 ```bash
-# 1. Build Python primeiro
-cd python
-build.bat
-cd ..
-
-# 2. Build Electron
+# Build Electron (sem Python)
 npm run build
 
 # Resultado em:
-# dist/GTA-Analytics-1.0.0-Setup.exe  (Instalador NSIS)
+# dist/GTA-Analytics-1.0.0-Setup.exe    (Instalador NSIS)
 # dist/GTA-Analytics-1.0.0-Portable.exe (Versão portável)
 ```
 
@@ -103,7 +92,8 @@ npm run build:dir
 
 ```
 electron-app/
-├── main.js                    # Electron main process
+├── main.js                    # Electron main process + IPC handlers
+├── capture.js                 # Lógica de captura (JavaScript nativo)
 ├── preload.js                 # IPC bridge seguro
 ├── package.json               # Config npm
 │
@@ -113,13 +103,6 @@ electron-app/
 │   │   └── styles.css        # Estilos
 │   └── js/
 │       └── app.js            # JavaScript frontend
-│
-├── python/                    # Python capture client
-│   ├── capture.py            # Script captura
-│   ├── requirements.txt      # Python deps
-│   ├── build.bat             # Build script
-│   └── dist/
-│       └── capture.exe       # Executável Python (gerado)
 │
 ├── assets/                    # Ícones e recursos
 │   ├── icon.ico              # App icon
@@ -168,15 +151,15 @@ const CONFIG = {
 ┌─────────────────────────────────┐
 │  GTA-Analytics.exe              │
 │  ├─ Electron (Interface)        │
-│  ├─ Python (Captura embutido)   │
-│  └─ IPC Bridge                  │
+│  ├─ capture.js (desktopCapturer)│
+│  └─ IPC Bridge (preload.js)     │
 └─────────────────────────────────┘
          │
-         │ HTTPS
+         │ HTTPS (multipart/form-data JPEG)
          ▼
 ┌─────────────────────────────────┐
-│  Fly.io Backend (já existe!)    │
-│  ├─ Vision AI processing        │
+│  Fly.io Backend                 │
+│  ├─ GPT-4o Vision processing    │
 │  ├─ Team tracking               │
 │  └─ WebSocket broadcast         │
 └─────────────────────────────────┘
@@ -185,11 +168,12 @@ const CONFIG = {
 ### Fluxo de Captura
 
 1. **Usuário** clica "Iniciar Captura"
-2. **Electron** spawna processo Python
-3. **Python** captura GTA V usando windows-capture/d3dshot
-4. **Python** envia frames via HTTPS para Fly.io
-5. **Backend** processa com Vision AI
-6. **Dashboard** mostra kills em tempo real
+2. **GTACapture** verifica se `GTA5.exe` está rodando (via PowerShell)
+3. **desktopCapturer** captura frame da tela principal (1280×720)
+4. **Frame diff** filtra cenas estáticas (skip se mudança < 3%)
+5. **JPEG** é enviado via HTTPS POST para o backend no Fly.io
+6. **Backend** processa com GPT-4o Vision e transmite kills ao vivo
+7. **Dashboard** mostra o kill feed em tempo real
 
 ---
 
@@ -200,14 +184,6 @@ const CONFIG = {
 ```bash
 # Verificar logs
 %APPDATA%\gta-analytics\logs\
-```
-
-### Python não funciona
-
-```bash
-# Testar Python standalone
-cd python/dist
-capture.exe --server https://gta-analytics-v2.fly.dev --fps 0.5
 ```
 
 ### Antivírus bloqueia
@@ -367,14 +343,13 @@ MIT License - Copyright © 2026 Paulo Eugenio Campos
 
 **Tecnologias:**
 - Electron - Framework desktop
-- Python - Captura de tela
-- windows-capture / d3dshot - Screen capture
-- httpx - HTTP client
-- Pillow - Image processing
+- desktopCapturer - Screen capture nativo (sem Python)
+- axios - HTTP client
+- form-data - Multipart frame upload
 
 **Backend:**
 - FastAPI - Server framework
-- Together AI - Vision AI processing
+- GPT-4o Vision - Processamento de frames
 - Fly.io - Cloud hosting
 
 **Desenvolvido para:**
