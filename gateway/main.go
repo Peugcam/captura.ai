@@ -69,14 +69,16 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Configurar rotas
+	// Rotas de INGESTÃO de frames (/ws, /offer, /upload) exigem X-API-Key.
+	// Rotas de leitura interna (/frames, /stats, /health) ficam livres para o poller do backend.
 	if *enableWebSocket {
-		mux.HandleFunc("/ws", wsHandler.HandleWebSocket)
+		mux.HandleFunc("/ws", requireAuth(wsHandler.HandleWebSocket))
 		mux.HandleFunc("/stats", statsHandler(wsHandler))
 		mux.HandleFunc("/frames", framesHandler(wsHandler))
 	}
 
 	if *enableWebRTC {
-		mux.HandleFunc("/offer", webrtcHandler.HandleOffer)
+		mux.HandleFunc("/offer", requireAuth(webrtcHandler.HandleOffer))
 		if !*enableWebSocket {
 			// Se WebSocket desabilitado, usar buffer do WebRTC para /frames e /stats
 			mux.HandleFunc("/stats", statsHandlerWebRTC(webrtcHandler))
@@ -86,11 +88,11 @@ func main() {
 
 	mux.HandleFunc("/health", healthHandler)
 
-	// HTTP upload endpoint for OBS Browser Source
+	// HTTP upload endpoint (ingestão de frames) — protegido
 	if *enableWebSocket {
-		mux.HandleFunc("/upload", uploadHandler(wsHandler))
+		mux.HandleFunc("/upload", requireAuth(uploadHandler(wsHandler)))
 	} else if *enableWebRTC {
-		mux.HandleFunc("/upload", uploadHandlerWebRTC(webrtcHandler))
+		mux.HandleFunc("/upload", requireAuth(uploadHandlerWebRTC(webrtcHandler)))
 	}
 
 	// Start IPC server (Unix Socket / Named Pipe)

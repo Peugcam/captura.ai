@@ -13,6 +13,7 @@ let uptimeInterval = null;
 let currentMode = 'live'; // 'live' or 'video'
 let currentConfig = {
     serverUrl: 'https://gta-analytics-v2.fly.dev',
+    apiKey: '',
     fps: 0.5,
     videoSource: ''
 };
@@ -176,6 +177,7 @@ function setupIPCListeners() {
 
 async function handleStartCapture() {
     const serverUrl = document.getElementById('server-url').value.trim();
+    const apiKey = document.getElementById('api-key').value.trim();
     const fps = parseFloat(document.getElementById('fps-slider').value);
 
     if (!serverUrl) {
@@ -204,7 +206,7 @@ async function handleStartCapture() {
     addLog('Iniciando captura...');
 
     try {
-        const result = await window.electronAPI.startCapture(serverUrl, fps, currentMode, videoSource);
+        const result = await window.electronAPI.startCapture(serverUrl, fps, currentMode, videoSource, apiKey);
 
         if (result.success) {
             isCapturing = true;
@@ -367,6 +369,7 @@ function toggleSettings() {
 
 async function handleSaveSettings() {
     const serverUrl = document.getElementById('server-url').value.trim();
+    const apiKey = document.getElementById('api-key').value.trim();
     const fps = parseFloat(document.getElementById('fps-slider').value);
 
     if (!serverUrl) {
@@ -383,6 +386,7 @@ async function handleSaveSettings() {
     }
 
     currentConfig.serverUrl = serverUrl;
+    currentConfig.apiKey = apiKey;
     currentConfig.fps = fps;
 
     try {
@@ -413,6 +417,7 @@ async function loadConfig() {
         currentConfig = config;
 
         document.getElementById('server-url').value = config.serverUrl;
+        document.getElementById('api-key').value = config.apiKey || '';
         document.getElementById('fps-slider').value = config.fps;
         document.getElementById('fps-value').textContent = config.fps.toFixed(1);
 
