@@ -577,7 +577,7 @@ async def export_to_excel(format: str = "luis", api_key: str = Depends(verify_ap
         raise
     except Exception as e:
         logger.error(f"Erro ao exportar: {e}")
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Falha ao exportar")
 
 
 @app.post("/reset")
@@ -599,7 +599,7 @@ async def reset_stats(api_key: str = Depends(verify_api_key)):
 
     except Exception as e:
         logger.error(f"Erro ao resetar: {e}")
-        return {"error": str(e)}
+        return {"error": "Erro interno ao resetar"}
 
 
 # ============================================================================
@@ -682,7 +682,7 @@ async def upload_roster_image(file: UploadFile = File(...), api_key: str = Depen
         raise
     except Exception as e:
         logger.error(f"❌ Error processing roster image: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao processar imagem")
 
 
 @app.post("/api/tournament/roster/manual")
@@ -742,7 +742,7 @@ async def manual_roster_input(roster_input: ManualRosterInput, api_key: str = De
         raise
     except Exception as e:
         logger.error(f"❌ Error in manual roster input: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao processar entrada manual")
 
 
 @app.get("/api/tournament/roster")
@@ -1043,7 +1043,7 @@ async def upload_frame(file: UploadFile = File(...), api_key: str = Depends(veri
 
     except Exception as e:
         logger.error(f"❌ Error processing uploaded frame: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro ao processar frame")
 
 
 # ============================================================================
