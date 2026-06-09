@@ -319,6 +319,24 @@ if not INTERNAL_API_TOKEN:
 # Hash the token for comparison (prevents timing attacks)
 TOKEN_HASH = hashlib.sha256(INTERNAL_API_TOKEN.encode()).hexdigest()
 
+# Senha de admin para login dos dashboards no navegador (auth de usuário)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest() if ADMIN_PASSWORD else ""
+
+
+def verify_password(password: str) -> bool:
+    """Valida a senha de admin com comparação constant-time."""
+    if not ADMIN_PASSWORD_HASH:
+        logger.warning("🔒 Login rejeitado: ADMIN_PASSWORD não configurado no .env")
+        return False
+    provided = hashlib.sha256(password.encode()).hexdigest()
+    return secrets.compare_digest(provided, ADMIN_PASSWORD_HASH)
+
+
+def get_internal_token() -> str:
+    """Retorna o token interno, devolvido ao navegador após login bem-sucedido."""
+    return INTERNAL_API_TOKEN
+
 
 def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> str:
     """

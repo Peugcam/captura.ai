@@ -14,6 +14,7 @@ import time
 import httpx
 import io
 import asyncio
+import os
 from PIL import Image
 from datetime import datetime
 import sys
@@ -32,8 +33,8 @@ CAPTURE_INTERVAL = 2.0  # 1 frame a cada 2 segundos = 0.5 FPS
 # Qualidade JPEG (85 = ótimo balanço qualidade/tamanho)
 JPEG_QUALITY = 85
 
-# API Key (opcional - remova se não quiser autenticação)
-API_KEY = None  # ou "seu-api-key-aqui"
+# API Key (obrigatória - o servidor exige header X-API-Key). Lida do ambiente.
+API_KEY = os.getenv("INTERNAL_API_TOKEN")
 
 # ============================================================================
 # ESTATÍSTICAS
