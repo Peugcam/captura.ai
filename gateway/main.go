@@ -70,19 +70,20 @@ func main() {
 
 	// Configurar rotas
 	// Rotas de INGESTÃO de frames (/ws, /offer, /upload) exigem X-API-Key.
-	// Rotas de leitura interna (/frames, /stats, /health) ficam livres para o poller do backend.
+	// Rotas de leitura (/frames, /stats) também exigem X-API-Key — o poller do
+	// backend envia o mesmo token. Só /health fica livre (health check do Fly.io).
 	if *enableWebSocket {
 		mux.HandleFunc("/ws", requireAuth(wsHandler.HandleWebSocket))
-		mux.HandleFunc("/stats", statsHandler(wsHandler))
-		mux.HandleFunc("/frames", framesHandler(wsHandler))
+		mux.HandleFunc("/stats", requireAuth(statsHandler(wsHandler)))
+		mux.HandleFunc("/frames", requireAuth(framesHandler(wsHandler)))
 	}
 
 	if *enableWebRTC {
 		mux.HandleFunc("/offer", requireAuth(webrtcHandler.HandleOffer))
 		if !*enableWebSocket {
 			// Se WebSocket desabilitado, usar buffer do WebRTC para /frames e /stats
-			mux.HandleFunc("/stats", statsHandlerWebRTC(webrtcHandler))
-			mux.HandleFunc("/frames", framesHandlerWebRTC(webrtcHandler))
+			mux.HandleFunc("/stats", requireAuth(statsHandlerWebRTC(webrtcHandler)))
+			mux.HandleFunc("/frames", requireAuth(framesHandlerWebRTC(webrtcHandler)))
 		}
 	}
 

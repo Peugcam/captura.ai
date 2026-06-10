@@ -22,14 +22,14 @@ import os
 import base64
 from typing import List, Dict, Set
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import uvicorn
 import config
 from processor import FrameProcessor
-from src.security import verify_api_key, global_rate_limiter, verify_password, get_internal_token
+from src.security import verify_api_key, global_rate_limiter, login_rate_limiter, verify_password, get_internal_token
 from roster_manager import RosterManager
 from src.multi_api_client import MultiAPIClient
 
@@ -112,7 +112,13 @@ class FramePoller:
 
     def __init__(self, gateway_url: str):
         self.gateway_url = gateway_url
-        self.client = httpx.AsyncClient(timeout=10.0)
+        # Envia X-API-Key ao gateway (mesmo INTERNAL_API_TOKEN). Em dev sem token,
+        # o gateway roda com auth desabilitada, então o header ausente não atrapalha.
+        headers = {}
+        token = get_internal_token()
+        if token:
+            headers["X-API-Key"] = token
+        self.client = httpx.AsyncClient(timeout=10.0, headers=headers)
 
     async def fetch_frames(self) -> List[Dict]:
         """Fetch batch of frames from gateway"""
@@ -453,18 +459,24 @@ async def health():
 
 
 @app.post("/api/auth/login")
-async def login(creds: LoginInput):
+async def login(creds: LoginInput, request: Request):
     """
     Login por senha para os dashboards no navegador.
     Senha correta -> devolve o token usado como X-API-Key nas chamadas protegidas.
     """
+    # Atrás do proxy do Fly.io o IP real vem no header fly-client-ip.
+    client_ip = request.headers.get("fly-client-ip") or (request.client.host if request.client else "unknown")
+    if not login_rate_limiter.is_allowed(f"login:{client_ip}"):
+        logger.warning(f"🔒 Login bloqueado por rate limit: {client_ip}")
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde 1 minuto.")
+
     if not verify_password(creds.password):
         raise HTTPException(status_code=401, detail="Senha incorreta")
     return {"token": get_internal_token()}
 
 
 @app.get("/stats")
-async def get_stats():
+async def get_stats(api_key: str = Depends(verify_api_key)):
     """Retorna estatisticas atuais"""
     if backend:
         return backend.processor.get_stats()
@@ -746,7 +758,7 @@ async def manual_roster_input(roster_input: ManualRosterInput, api_key: str = De
 
 
 @app.get("/api/tournament/roster")
-async def get_current_roster():
+async def get_current_roster(api_key: str = Depends(verify_api_key)):
     """Get current tournament roster and team status"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -929,7 +941,7 @@ async def clear_tournament_roster(api_key: str = Depends(verify_api_key)):
 
 
 @app.get("/api/tournament/history/teams")
-async def get_team_history():
+async def get_team_history(api_key: str = Depends(verify_api_key)):
     """Get all known team tags from history"""
     from team_history import get_history_manager
 
@@ -940,7 +952,7 @@ async def get_team_history():
 
 
 @app.get("/api/tournament/history/team/{team_tag}")
-async def get_team_stats(team_tag: str):
+async def get_team_stats(team_tag: str, api_key: str = Depends(verify_api_key)):
     """Get historical stats for a specific team"""
     from team_history import get_history_manager
 
@@ -954,7 +966,7 @@ async def get_team_stats(team_tag: str):
 
 
 @app.get("/api/tournament/history/players/{team_tag}")
-async def get_known_players(team_tag: str, limit: int = 5):
+async def get_known_players(team_tag: str, limit: int = 5, api_key: str = Depends(verify_api_key)):
     """Get known players for a team"""
     from team_history import get_history_manager
 
@@ -965,7 +977,7 @@ async def get_known_players(team_tag: str, limit: int = 5):
 
 
 @app.get("/api/tournament/live/stats")
-async def get_live_tournament_stats():
+async def get_live_tournament_stats(api_key: str = Depends(verify_api_key)):
     """Get live tournament statistics with historical comparison"""
     from tournament_tracker import get_tracker
 

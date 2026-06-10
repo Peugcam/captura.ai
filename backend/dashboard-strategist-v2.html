@@ -6,7 +6,7 @@
     <script>
     (function () {
       const AUTH_KEY = 'capturai_token';
-      const PROTECTED = /(\/api\/|\/export)/;
+      const PROTECTED = /(\/api\/|\/export|\/stats)/;
 
       async function doLogin() {
         const pwd = prompt('🔒 Senha de acesso ao dashboard:');

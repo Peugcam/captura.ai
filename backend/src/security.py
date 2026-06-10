@@ -292,6 +292,10 @@ class RateLimiter:
 # Singleton global para rate limiting
 global_rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 
+# Rate limiter dedicado ao login: agressivo o suficiente para travar brute-force
+# da senha admin, mas folgado para o uso real (login acontece 1x e o token fica salvo).
+login_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
 
 # ============================================================================
 # API Authentication
