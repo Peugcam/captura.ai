@@ -28,6 +28,7 @@ let captureStatus = {
 const isDev = !app.isPackaged; // Detecta modo desenvolvimento automaticamente
 const CONFIG = {
     serverUrl: 'https://gta-analytics-v2.fly.dev',
+    apiKey: '',  // X-API-Key exigida pelo backend (INTERNAL_API_TOKEN)
     fps: 1.0,  // Changed from 0.5 to 1.0 for better kill detection
     autoStart: false
 };
@@ -168,7 +169,7 @@ async function startPythonCapture(serverUrl, fps) {
         return { success: false, error: 'Already running' };
     }
 
-    captureInstance = new GTACapture(serverUrl, fps, sendToRenderer);
+    captureInstance = new GTACapture(serverUrl, fps, sendToRenderer, CONFIG.apiKey);
     const result = captureInstance.start();
 
     captureStatus.running = true;
@@ -256,9 +257,10 @@ function updateTrayMenu() {
 /**
  * Iniciar captura
  */
-ipcMain.handle('start-capture', async (event, { serverUrl, fps, mode, videoSource }) => {
+ipcMain.handle('start-capture', async (event, { serverUrl, fps, mode, videoSource, apiKey }) => {
     CONFIG.serverUrl = serverUrl;
     CONFIG.fps = fps;
+    if (apiKey !== undefined) CONFIG.apiKey = apiKey;
 
     return await startPythonCapture(serverUrl, fps);
 });

@@ -11,11 +11,12 @@ const FormData = require('form-data');
 const { exec } = require('child_process');
 
 class GTACapture {
-    constructor(serverUrl, fps, sendToRenderer) {
+    constructor(serverUrl, fps, sendToRenderer, apiKey) {
         if (!serverUrl || !serverUrl.startsWith('https://')) {
             throw new Error('serverUrl deve começar com https://');
         }
         this.serverUrl = `${serverUrl}/api/frames/upload`;
+        this.apiKey = apiKey;
         this.fps = fps;
         this.interval = 1000 / fps;
         this.running = false;
@@ -77,7 +78,10 @@ class GTACapture {
             if (!this.running) return null; // aborta se stop() foi chamado
             try {
                 const response = await axios.post(this.serverUrl, form, {
-                    headers: form.getHeaders(),
+                    headers: {
+                        ...form.getHeaders(),
+                        ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {})
+                    },
                     timeout: 15000
                 });
 

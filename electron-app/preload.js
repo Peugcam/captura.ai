@@ -18,8 +18,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {string} videoSource - Caminho do vídeo (se mode === 'video')
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    startCapture: (serverUrl, fps, mode, videoSource) => {
-        return ipcRenderer.invoke('start-capture', { serverUrl, fps, mode, videoSource });
+    startCapture: (serverUrl, fps, mode, videoSource, apiKey) => {
+        return ipcRenderer.invoke('start-capture', { serverUrl, fps, mode, videoSource, apiKey });
     },
 
     /**

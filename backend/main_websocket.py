@@ -22,14 +22,14 @@ import os
 import base64
 from typing import List, Dict, Set
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import uvicorn
 import config
 from processor import FrameProcessor
-from src.security import verify_api_key, global_rate_limiter
+from src.security import verify_api_key, global_rate_limiter, login_rate_limiter, verify_password, get_internal_token
 from roster_manager import RosterManager
 from src.multi_api_client import MultiAPIClient
 
@@ -59,6 +59,11 @@ class PlayerStatusUpdate(BaseModel):
     team_tag: str
     player_name: str
     alive: bool
+
+
+class LoginInput(BaseModel):
+    """Model para login por senha nos dashboards"""
+    password: str
 
 
 class ConnectionManager:
@@ -107,7 +112,13 @@ class FramePoller:
 
     def __init__(self, gateway_url: str):
         self.gateway_url = gateway_url
-        self.client = httpx.AsyncClient(timeout=10.0)
+        # Envia X-API-Key ao gateway (mesmo INTERNAL_API_TOKEN). Em dev sem token,
+        # o gateway roda com auth desabilitada, então o header ausente não atrapalha.
+        headers = {}
+        token = get_internal_token()
+        if token:
+            headers["X-API-Key"] = token
+        self.client = httpx.AsyncClient(timeout=10.0, headers=headers)
 
     async def fetch_frames(self) -> List[Dict]:
         """Fetch batch of frames from gateway"""
@@ -385,7 +396,6 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost",
     "http://127.0.0.1",
-    "null"  # Permite file:// protocol para testes locais
 ]
 logger.info(f"🔒 CORS configurado com origens específicas: {ALLOWED_ORIGINS}")
 
@@ -448,8 +458,25 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/api/auth/login")
+async def login(creds: LoginInput, request: Request):
+    """
+    Login por senha para os dashboards no navegador.
+    Senha correta -> devolve o token usado como X-API-Key nas chamadas protegidas.
+    """
+    # Atrás do proxy do Fly.io o IP real vem no header fly-client-ip.
+    client_ip = request.headers.get("fly-client-ip") or (request.client.host if request.client else "unknown")
+    if not login_rate_limiter.is_allowed(f"login:{client_ip}"):
+        logger.warning(f"🔒 Login bloqueado por rate limit: {client_ip}")
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde 1 minuto.")
+
+    if not verify_password(creds.password):
+        raise HTTPException(status_code=401, detail="Senha incorreta")
+    return {"token": get_internal_token()}
+
+
 @app.get("/stats")
-async def get_stats():
+async def get_stats(api_key: str = Depends(verify_api_key)):
     """Retorna estatisticas atuais"""
     if backend:
         return backend.processor.get_stats()
@@ -492,24 +519,6 @@ async def serve_strategist_dashboard():
     return FileResponse(dashboard_path, media_type="text/html")
 
 
-@app.get("/")
-async def serve_main_dashboard():
-    """Serve dashboard principal OBS"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-obs.html")
-    if not os.path.exists(dashboard_path):
-        raise HTTPException(status_code=404, detail="Dashboard principal não encontrado")
-    return FileResponse(dashboard_path, media_type="text/html")
-
-
-@app.get("/obs")
-async def serve_obs_dashboard():
-    """Serve dashboard OBS - Battle Royale Analytics"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard-obs.html")
-    if not os.path.exists(dashboard_path):
-        raise HTTPException(status_code=404, detail="Dashboard OBS não encontrado")
-    return FileResponse(dashboard_path, media_type="text/html")
-
-
 @app.get("/v2")
 async def serve_v2_dashboard():
     """Serve dashboard V2 - Battle Royale Analytics V2"""
@@ -517,15 +526,6 @@ async def serve_v2_dashboard():
     if not os.path.exists(dashboard_path):
         raise HTTPException(status_code=404, detail="Dashboard V2 não encontrado")
     return FileResponse(dashboard_path, media_type="text/html")
-
-
-@app.get("/capture-obs")
-async def serve_obs_capture():
-    """Serve OBS Browser Source capture page"""
-    capture_path = os.path.join(os.path.dirname(__file__), "..", "capture-obs.html")
-    if not os.path.exists(capture_path):
-        raise HTTPException(status_code=404, detail="OBS capture page not found")
-    return FileResponse(capture_path, media_type="text/html")
 
 
 @app.post("/export")
@@ -589,11 +589,11 @@ async def export_to_excel(format: str = "luis", api_key: str = Depends(verify_ap
         raise
     except Exception as e:
         logger.error(f"Erro ao exportar: {e}")
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Falha ao exportar")
 
 
 @app.post("/reset")
-async def reset_stats():
+async def reset_stats(api_key: str = Depends(verify_api_key)):
     """
     Reseta estatísticas do backend (limpa todos os dados)
     """
@@ -611,7 +611,7 @@ async def reset_stats():
 
     except Exception as e:
         logger.error(f"Erro ao resetar: {e}")
-        return {"error": str(e)}
+        return {"error": "Erro interno ao resetar"}
 
 
 # ============================================================================
@@ -619,7 +619,7 @@ async def reset_stats():
 # ============================================================================
 
 @app.post("/api/tournament/roster/upload")
-async def upload_roster_image(file: UploadFile = File(...)):
+async def upload_roster_image(file: UploadFile = File(...), api_key: str = Depends(verify_api_key)):
     """
     Upload tournament bracket image and extract team roster automatically using AI
     Falls back to manual input if extraction fails
@@ -694,11 +694,11 @@ async def upload_roster_image(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"❌ Error processing roster image: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao processar imagem")
 
 
 @app.post("/api/tournament/roster/manual")
-async def manual_roster_input(roster_input: ManualRosterInput):
+async def manual_roster_input(roster_input: ManualRosterInput, api_key: str = Depends(verify_api_key)):
     """
     Manually input tournament roster (fallback when AI extraction fails)
 
@@ -754,11 +754,11 @@ async def manual_roster_input(roster_input: ManualRosterInput):
         raise
     except Exception as e:
         logger.error(f"❌ Error in manual roster input: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao processar entrada manual")
 
 
 @app.get("/api/tournament/roster")
-async def get_current_roster():
+async def get_current_roster(api_key: str = Depends(verify_api_key)):
     """Get current tournament roster and team status"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -771,7 +771,7 @@ async def get_current_roster():
 
 
 @app.post("/api/tournament/team/add")
-async def add_team_to_roster(team: ManualTeamInput):
+async def add_team_to_roster(team: ManualTeamInput, api_key: str = Depends(verify_api_key)):
     """Add a single team to tournament roster (for corrections)"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -798,7 +798,7 @@ async def add_team_to_roster(team: ManualTeamInput):
 
 
 @app.put("/api/tournament/team/{team_tag}")
-async def update_team(team_tag: str, team: ManualTeamInput):
+async def update_team(team_tag: str, team: ManualTeamInput, api_key: str = Depends(verify_api_key)):
     """Update team information (for manual corrections)"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -825,7 +825,7 @@ async def update_team(team_tag: str, team: ManualTeamInput):
 
 
 @app.delete("/api/tournament/team/{team_tag}")
-async def remove_team(team_tag: str):
+async def remove_team(team_tag: str, api_key: str = Depends(verify_api_key)):
     """Remove team from tournament (for manual corrections)"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -848,7 +848,7 @@ async def remove_team(team_tag: str):
 
 
 @app.post("/api/tournament/player/status")
-async def update_player_status(status: PlayerStatusUpdate):
+async def update_player_status(status: PlayerStatusUpdate, api_key: str = Depends(verify_api_key)):
     """
     Manually update player alive/dead status (for manual corrections during match)
 
@@ -897,7 +897,7 @@ async def update_player_status(status: PlayerStatusUpdate):
 
 
 @app.post("/api/tournament/match/reset")
-async def reset_match():
+async def reset_match(api_key: str = Depends(verify_api_key)):
     """Reset match (all players alive, stats cleared) but keep roster"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -922,7 +922,7 @@ async def reset_match():
 
 
 @app.post("/api/tournament/roster/clear")
-async def clear_tournament_roster():
+async def clear_tournament_roster(api_key: str = Depends(verify_api_key)):
     """Clear tournament roster completely (exit tournament mode)"""
     if not roster_manager:
         raise HTTPException(status_code=503, detail="Roster manager not initialized")
@@ -941,7 +941,7 @@ async def clear_tournament_roster():
 
 
 @app.get("/api/tournament/history/teams")
-async def get_team_history():
+async def get_team_history(api_key: str = Depends(verify_api_key)):
     """Get all known team tags from history"""
     from team_history import get_history_manager
 
@@ -952,7 +952,7 @@ async def get_team_history():
 
 
 @app.get("/api/tournament/history/team/{team_tag}")
-async def get_team_stats(team_tag: str):
+async def get_team_stats(team_tag: str, api_key: str = Depends(verify_api_key)):
     """Get historical stats for a specific team"""
     from team_history import get_history_manager
 
@@ -966,7 +966,7 @@ async def get_team_stats(team_tag: str):
 
 
 @app.get("/api/tournament/history/players/{team_tag}")
-async def get_known_players(team_tag: str, limit: int = 5):
+async def get_known_players(team_tag: str, limit: int = 5, api_key: str = Depends(verify_api_key)):
     """Get known players for a team"""
     from team_history import get_history_manager
 
@@ -977,7 +977,7 @@ async def get_known_players(team_tag: str, limit: int = 5):
 
 
 @app.get("/api/tournament/live/stats")
-async def get_live_tournament_stats():
+async def get_live_tournament_stats(api_key: str = Depends(verify_api_key)):
     """Get live tournament statistics with historical comparison"""
     from tournament_tracker import get_tracker
 
@@ -988,7 +988,7 @@ async def get_live_tournament_stats():
 
 
 @app.post("/api/tournament/finish")
-async def finish_tournament(winner_tag: str = None):
+async def finish_tournament(winner_tag: str = None, api_key: str = Depends(verify_api_key)):
     """Finish tournament and save to history"""
     from tournament_tracker import get_tracker
 
@@ -1012,7 +1012,7 @@ async def serve_tournament_dashboard():
 # ============================================================================
 
 @app.post("/api/frames/upload")
-async def upload_frame(file: UploadFile = File(...)):
+async def upload_frame(file: UploadFile = File(...), api_key: str = Depends(verify_api_key)):
     """
     Upload frame directly from OBS Browser Source
 
@@ -1055,7 +1055,7 @@ async def upload_frame(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error(f"❌ Error processing uploaded frame: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro ao processar frame")
 
 
 # ============================================================================

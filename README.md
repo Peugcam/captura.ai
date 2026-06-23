@@ -44,7 +44,6 @@ Client (Python)  →  Gateway (Go/Fly.io)  →  Backend (Python/FastAPI/Fly.io)
 backend/       → API FastAPI + processamento de visão
 gateway/       → Servidor WebRTC em Go
 electron-app/  → App desktop para captura
-obs-plugin/    → Plugin para OBS Studio
 tests/         → Testes automatizados
 docs/          → Documentação
 ```
